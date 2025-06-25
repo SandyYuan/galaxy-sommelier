@@ -9,15 +9,14 @@ import pandas as pd
 import requests
 import numpy as np
 from astropy.io import fits
-from astroquery.sdss import SDSS
-from astropy.coordinates import SkyCoord
-import astropy.units as u
 from astropy.table import Table
 from tqdm import tqdm
 import time
 import logging
 from pathlib import Path
 import argparse
+import zipfile
+import random
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -41,7 +40,7 @@ class GalaxyZooDownloader:
         """Download Galaxy Zoo catalogs"""
         logger.info("Downloading Galaxy Zoo 2 catalogs...")
         
-        # Galaxy Zoo 2 main catalog from Hart et al. 2016 (best debiased table)
+        # Galaxy Zoo 2 main catalog from Hart et al. 2016 (FITS version)
         gz2_url = "https://gz2hart.s3.amazonaws.com/gz2_hart16.fits.gz"
         gz2_path = self.catalog_dir / 'gz2_hart16.fits.gz'
         
@@ -73,9 +72,8 @@ class GalaxyZooDownloader:
             catalog_table = Table.read(gz2_path)
             catalog = catalog_table.to_pandas()
             logger.info(f"Loaded catalog with {len(catalog)} galaxies")
-            logger.info(f"Columns: {list(catalog.columns[:10])}...")  # Show first 10 columns
-            
-            # Basic validation
+            logger.info(f"Columns: {list(catalog.columns[:10])}...")
+
             required_cols = ['dr7objid', 'ra', 'dec']
             missing_cols = [col for col in required_cols if col not in catalog.columns]
             if missing_cols:
@@ -87,77 +85,70 @@ class GalaxyZooDownloader:
             logger.error(f"Error loading catalog: {e}")
             raise
     
-    def download_sdss_images(self, catalog, limit=None, start_index=0):
-        """Download SDSS images for Galaxy Zoo objects"""
-        logger.info(f"Starting SDSS image download...")
+    def download_images_from_zip(self):
+        """Download and extract Galaxy Zoo 2 images from Zenodo."""
+        logger.info("Downloading Galaxy Zoo 2 images from Zenodo...")
         
-        if limit:
-            end_index = min(start_index + limit, len(catalog))
-            catalog_subset = catalog.iloc[start_index:end_index]
-            logger.info(f"Downloading {len(catalog_subset)} images (indices {start_index}-{end_index-1})")
-        else:
-            catalog_subset = catalog.iloc[start_index:]
-            logger.info(f"Downloading {len(catalog_subset)} images (from index {start_index})")
+        zip_url = "https://zenodo.org/records/3565489/files/images_gz2.zip?download=1"
+        zip_path = self.catalog_dir / 'images_gz2.zip'
         
-        successful_downloads = 0
-        failed_downloads = 0
-        
-        for idx, row in tqdm(catalog_subset.iterrows(), total=len(catalog_subset), desc="Downloading SDSS images"):
-            ra, dec = row['ra'], row['dec']
-            objid = row['dr7objid']
-            
-            output_path = self.data_dir / f'sdss_{objid}.fits'
-            
-            # Skip if already exists
-            if output_path.exists():
-                continue
-                
+        if not zip_path.exists():
+            logger.info(f"Downloading image archive from {zip_url}...")
             try:
-                # Create SkyCoord object
-                coords = SkyCoord(ra=ra*u.deg, dec=dec*u.deg, frame='icrs')
+                response = requests.get(zip_url, stream=True)
+                response.raise_for_status()
                 
-                # Download SDSS image with timeout
-                images = SDSS.get_images(coordinates=coords, radius=30*u.arcsec, 
-                                       data_release=8, band='r', timeout=30)
+                total_size = int(response.headers.get('content-length', 0))
+                block_size = 8192
                 
-                if images and len(images) > 0:
-                    # Save the first (usually only) image
-                    images[0].writeto(output_path, overwrite=True)
-                    successful_downloads += 1
-                else:
-                    logger.warning(f"No image found for objid {objid}")
-                    failed_downloads += 1
+                with open(zip_path, 'wb') as f:
+                    with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading images_gz2.zip") as pbar:
+                        for chunk in response.iter_content(chunk_size=block_size):
+                            if chunk:
+                                f.write(chunk)
+                                pbar.update(len(chunk))
                 
-                # Add small delay to be respectful to servers
-                time.sleep(0.1)
-                
+                logger.info(f"Successfully downloaded image archive to {zip_path}")
             except Exception as e:
-                logger.error(f"Error downloading objid {objid}: {e}")
-                failed_downloads += 1
-                continue
-        
-        logger.info(f"Download completed: {successful_downloads} successful, {failed_downloads} failed")
-        return successful_downloads, failed_downloads
-    
+                logger.error(f"Error downloading image archive: {e}")
+                raise
+        else:
+            logger.info(f"Image archive already exists at {zip_path}")
+
+        logger.info(f"Extracting images to {self.data_dir}...")
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                for member in tqdm(zip_ref.infolist(), desc="Extracting images"):
+                    if member.is_dir():
+                        continue
+                    
+                    target_filename = Path(member.filename).name
+                    if not target_filename: continue # Skip empty filenames
+
+                    target_path = self.data_dir / target_filename
+                    if not target_path.exists():
+                        with zip_ref.open(member) as source:
+                            with open(target_path, "wb") as target:
+                                target.write(source.read())
+
+            logger.info("Image extraction complete.")
+        except Exception as e:
+            logger.error(f"Error extracting images: {e}")
+            raise
+
     def create_sample_catalog(self, full_catalog, sample_size=1000, save_path=None):
         """Create a smaller sample catalog for testing"""
         logger.info(f"Creating sample catalog with {sample_size} galaxies...")
         
-        # Filter for galaxies with good quality morphology classifications
-        # Focus on galaxies with high vote counts for cleaner labels
         filtered = full_catalog.copy()
         
-        # Basic quality filters
         if 't01_smooth_or_features_a01_smooth_count' in full_catalog.columns:
-            # Calculate total votes for task 1
             vote_cols = [col for col in full_catalog.columns if 't01_' in col and '_count' in col]
             if vote_cols:
                 filtered['total_votes_t01'] = full_catalog[vote_cols].sum(axis=1)
-                # Keep galaxies with at least 10 votes
                 filtered = filtered[filtered['total_votes_t01'] >= 10]
                 logger.info(f"After vote filtering: {len(filtered)} galaxies")
         
-        # Random sample
         if len(filtered) > sample_size:
             sample_catalog = filtered.sample(n=sample_size, random_state=42).reset_index(drop=True)
         else:
@@ -171,32 +162,51 @@ class GalaxyZooDownloader:
         
         return sample_catalog
     
-    def validate_downloads(self):
-        """Validate downloaded FITS files"""
-        logger.info("Validating downloaded FITS files...")
+    def validate_downloads(self, sample_size=None):
+        """Validate downloaded JPG files"""
+        logger.info("Validating downloaded JPG files...")
         
-        fits_files = list(self.data_dir.glob("*.fits"))
-        logger.info(f"Found {len(fits_files)} FITS files")
+        try:
+            from PIL import Image
+        except ImportError:
+            logger.error("Pillow library not found. Cannot validate images. Please run 'pip install Pillow'")
+            return 0, 0
+
+        all_img_files = list(self.data_dir.glob("*.jpg"))
+        
+        # Filter out macOS metadata files
+        img_files_to_validate = [p for p in all_img_files if not p.name.startswith("._")]
+        
+        # Clean up metadata files
+        meta_files = [p for p in all_img_files if p.name.startswith("._")]
+        if meta_files:
+            logger.info(f"Found and removing {len(meta_files)} macOS metadata files (e.g., ._*)...")
+            for f in meta_files:
+                try:
+                    f.unlink()
+                except OSError as e:
+                    logger.error(f"Error removing metadata file {f}: {e}")
+
+        logger.info(f"Found {len(img_files_to_validate)} JPG files to validate.")
+        
+        if sample_size and len(img_files_to_validate) > sample_size:
+            logger.info(f"Validating a random sample of {sample_size} files.")
+            img_files_to_validate = random.sample(img_files_to_validate, sample_size)
         
         valid_files = 0
         corrupted_files = []
         
-        for fits_path in tqdm(fits_files, desc="Validating"):
+        for img_path in tqdm(img_files_to_validate, desc="Validating"):
             try:
-                with fits.open(fits_path) as hdul:
-                    # Basic validation - check if we can read the data
-                    data = hdul[0].data
-                    if data is not None and data.size > 0:
-                        valid_files += 1
-                    else:
-                        corrupted_files.append(fits_path)
+                with Image.open(img_path) as img:
+                    img.verify()
+                valid_files += 1
             except Exception as e:
-                logger.error(f"Corrupted file {fits_path}: {e}")
-                corrupted_files.append(fits_path)
+                logger.error(f"Corrupted file {img_path}: {e}")
+                corrupted_files.append(img_path)
         
         logger.info(f"Validation complete: {valid_files} valid, {len(corrupted_files)} corrupted")
         
-        # Remove corrupted files
         for corrupted_file in corrupted_files:
             try:
                 corrupted_file.unlink()
@@ -214,53 +224,33 @@ def main():
     parser.add_argument("--download-catalogs", action="store_true",
                        help="Download Galaxy Zoo catalogs")
     parser.add_argument("--download-images", action="store_true",
-                       help="Download SDSS images")
+                       help="Download SDSS images from Zenodo")
     parser.add_argument("--sample-size", type=int, default=1000,
-                       help="Number of images to download for testing")
-    parser.add_argument("--start-index", type=int, default=0,
-                       help="Starting index for image download")
+                       help="Number of galaxies for the sample catalog")
     parser.add_argument("--validate", action="store_true",
                        help="Validate downloaded files")
+    parser.add_argument("--validation-sample-size", type=int, default=None,
+                       help="Number of images to sample for validation.")
     
     args = parser.parse_args()
     
-    # Initialize downloader
     downloader = GalaxyZooDownloader(scratch_dir=args.scratch_dir)
     
-    # Download catalogs
     if args.download_catalogs:
         catalog = downloader.download_catalogs()
         
-        # Create sample catalog
         sample_catalog = downloader.create_sample_catalog(
             catalog, 
             sample_size=args.sample_size,
             save_path=downloader.catalog_dir / f'gz2_sample_{args.sample_size}.csv'
         )
-        
         logger.info(f"Sample catalog created with {len(sample_catalog)} galaxies")
     
-    # Download images
     if args.download_images:
-        # Load catalog
-        catalog_path = downloader.catalog_dir / 'gz2_hart16.fits.gz'
-        if not catalog_path.exists():
-            logger.error("Catalog not found. Run with --download-catalogs first.")
-            return
-        
-        catalog_table = Table.read(catalog_path)
-        catalog = catalog_table.to_pandas()
-        
-        # Download images
-        downloader.download_sdss_images(
-            catalog, 
-            limit=args.sample_size,
-            start_index=args.start_index
-        )
+        downloader.download_images_from_zip()
     
-    # Validate downloads
     if args.validate:
-        downloader.validate_downloads()
+        downloader.validate_downloads(sample_size=args.validation_sample_size)
 
 if __name__ == "__main__":
     main() 
