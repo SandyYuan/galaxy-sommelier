@@ -13,7 +13,7 @@ data:
 # Model configuration
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 37  # Galaxy Zoo 2 vote fractions
+  num_outputs: 74  # Galaxy Zoo 2 vote fractions (all fraction columns)
   dropout_rate: 0.2
   freeze_backbone: true
 

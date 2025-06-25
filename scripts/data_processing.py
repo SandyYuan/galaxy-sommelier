@@ -363,6 +363,7 @@ def create_data_loaders(config_path, sample_size=None):
         image_dir=data_config['sdss_dir'],
         transform=None,  # Will be set per split
         cache_dir=data_config['processed_dir'],
+        use_cache=False,  # Disable caching for faster startup
         sample_size=sample_size
     )
     
@@ -403,6 +404,7 @@ def create_data_loaders(config_path, sample_size=None):
         image_dir=data_config['sdss_dir'],
         transform=get_transforms('val'),
         cache_dir=data_config['processed_dir'],
+        use_cache=False,  # Disable caching for faster startup
         sample_size=sample_size
     )
     val_dataset = torch.utils.data.Subset(val_full_dataset, val_indices)
@@ -412,6 +414,7 @@ def create_data_loaders(config_path, sample_size=None):
         image_dir=data_config['sdss_dir'],
         transform=get_transforms('val'),
         cache_dir=data_config['processed_dir'],
+        use_cache=False,  # Disable caching for faster startup
         sample_size=sample_size
     )
     test_dataset = torch.utils.data.Subset(test_full_dataset, test_indices)

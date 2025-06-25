@@ -131,8 +131,8 @@ class GalaxyTrainer:
         # Optimizer
         self.optimizer = optim.AdamW(
             self.model.parameters(),
-            lr=training_config['learning_rate'],
-            weight_decay=training_config['weight_decay']
+            lr=float(training_config['learning_rate']),
+            weight_decay=float(training_config['weight_decay'])
         )
         
         # Scheduler
@@ -141,7 +141,7 @@ class GalaxyTrainer:
         self.scheduler = CosineAnnealingLR(
             self.optimizer,
             T_max=total_steps,
-            eta_min=training_config['learning_rate'] * 0.01
+            eta_min=float(training_config['learning_rate']) * 0.01
         )
         
         logger.info(f"Optimizer: AdamW, LR: {training_config['learning_rate']}")
