@@ -85,6 +85,70 @@ class GalaxyZooDownloader:
             logger.error(f"Error loading catalog: {e}")
             raise
     
+    def download_mapping_file(self):
+        """Downloads the GZ2 filename mapping file."""
+        logger.info("Downloading GZ2 filename mapping...")
+        mapping_url = "https://zenodo.org/records/3565489/files/gz2_filename_mapping.csv?download=1"
+        mapping_path = self.catalog_dir / 'gz2_filename_mapping.csv'
+
+        if not mapping_path.exists():
+            logger.info(f"Downloading mapping file from {mapping_url}...")
+            try:
+                response = requests.get(mapping_url, stream=True)
+                response.raise_for_status()
+                
+                total_size = int(response.headers.get('content-length', 0))
+                block_size = 8192
+                
+                with open(mapping_path, 'wb') as f:
+                    with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading mapping file") as pbar:
+                        for chunk in response.iter_content(chunk_size=block_size):
+                            if chunk:
+                                f.write(chunk)
+                                pbar.update(len(chunk))
+                
+                logger.info(f"Successfully downloaded mapping file to {mapping_path}")
+            except Exception as e:
+                logger.error(f"Error downloading mapping file: {e}")
+                raise
+        else:
+            logger.info(f"Mapping file already exists at {mapping_path}")
+            
+        return pd.read_csv(mapping_path)
+
+    def create_master_catalog(self, morphology_catalog, mapping_df):
+        """Merges morphology and filename mapping to create a master catalog."""
+        logger.info("Creating master catalog...")
+        
+        # The FITS catalog uses 'dr7objid', the mapping uses 'objid'. Let's align them.
+        mapping_df.rename(columns={'objid': 'dr7objid'}, inplace=True)
+        
+        # Merge the two dataframes using an inner join.
+        master_catalog = pd.merge(morphology_catalog, mapping_df, on='dr7objid', how='inner')
+        logger.info(f"Merged catalog has {len(master_catalog)} entries.")
+        
+        # Create the image filename
+        master_catalog['image_filename'] = master_catalog['asset_id'].apply(lambda x: f"{x}.jpg")
+        
+        # Verify that image files exist for entries in master catalog
+        logger.info("Verifying that image files exist for entries in master catalog...")
+        
+        image_exists_mask = master_catalog['image_filename'].apply(lambda f: (self.data_dir / f).exists())
+        
+        num_with_images = image_exists_mask.sum()
+        logger.info(f"{num_with_images} out of {len(master_catalog)} galaxies in the master catalog have a corresponding image file.")
+        
+        # Drop rows where the image is missing, as suggested in the documentation.
+        final_catalog = master_catalog[image_exists_mask].copy()
+        logger.info(f"Final catalog contains {len(final_catalog)} galaxies with images.")
+
+        # Save the master catalog
+        save_path = self.catalog_dir / 'gz2_master_catalog.csv'
+        final_catalog.to_csv(save_path, index=False)
+        logger.info(f"Master catalog saved to {save_path}")
+        
+        return final_catalog
+
     def download_images_from_zip(self):
         """Download and extract Galaxy Zoo 2 images from Zenodo."""
         logger.info("Downloading Galaxy Zoo 2 images from Zenodo...")
@@ -225,8 +289,8 @@ def main():
                        help="Download Galaxy Zoo catalogs")
     parser.add_argument("--download-images", action="store_true",
                        help="Download SDSS images from Zenodo")
-    parser.add_argument("--sample-size", type=int, default=1000,
-                       help="Number of galaxies for the sample catalog")
+    parser.add_argument("--create-master-catalog", action="store_true",
+                       help="Create and save a master catalog by merging morphology and filename mapping.")
     parser.add_argument("--validate", action="store_true",
                        help="Validate downloaded files")
     parser.add_argument("--validation-sample-size", type=int, default=None,
@@ -237,20 +301,36 @@ def main():
     downloader = GalaxyZooDownloader(scratch_dir=args.scratch_dir)
     
     if args.download_catalogs:
-        catalog = downloader.download_catalogs()
-        
-        sample_catalog = downloader.create_sample_catalog(
-            catalog, 
-            sample_size=args.sample_size,
-            save_path=downloader.catalog_dir / f'gz2_sample_{args.sample_size}.csv'
-        )
-        logger.info(f"Sample catalog created with {len(sample_catalog)} galaxies")
+        downloader.download_catalogs()
     
     if args.download_images:
         downloader.download_images_from_zip()
     
     if args.validate:
         downloader.validate_downloads(sample_size=args.validation_sample_size)
+
+    if args.create_master_catalog:
+        logger.info("--- Creating Master Catalog ---")
+        
+        # 1. Load main morphology catalog (download if necessary)
+        logger.info("Loading morphology catalog...")
+        try:
+            morphology_df = downloader.download_catalogs()
+        except Exception as e:
+            logger.error(f"Failed to load morphology catalog: {e}")
+            return
+
+        # 2. Load filename mapping file (download if necessary)
+        logger.info("Loading filename mapping file...")
+        try:
+            mapping_df = downloader.download_mapping_file()
+        except Exception as e:
+            logger.error(f"Failed to load mapping file: {e}")
+            return
+            
+        # 3. Create and save the master catalog
+        downloader.create_master_catalog(morphology_df, mapping_df)
+        logger.info("--- Master Catalog creation complete ---")
 
 if __name__ == "__main__":
     main() 
