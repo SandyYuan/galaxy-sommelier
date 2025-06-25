@@ -69,6 +69,10 @@ device: "cuda"
 num_workers: 4
 pin_memory: true
 
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results"
+
 # Logging
 logging:
   level: "INFO"
