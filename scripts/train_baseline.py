@@ -108,7 +108,7 @@ class GalaxyTrainer:
         """Setup train and validation data loaders"""
         logger.info("Setting up data loaders...")
         
-        self.train_loader, self.val_loader = create_data_loaders(
+        self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
             self.config_path, 
             sample_size=self.sample_size
         )

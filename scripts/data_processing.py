@@ -47,6 +47,9 @@ class GalaxyZooDataset(Dataset):
         
         logger.info(f"Dataset initialized with {len(self.catalog)} galaxies")
         
+        # Load image filename mapping
+        self.load_filename_mapping()
+        
         # Prepare morphology labels
         self.prepare_labels()
         
@@ -58,48 +61,44 @@ class GalaxyZooDataset(Dataset):
         if self.use_cache and not self.cache_file.exists():
             self.create_cache()
     
+    def load_filename_mapping(self):
+        """Load the mapping from dr7objid to asset_id (image filename)"""
+        mapping_path = self.catalog_path.parent / 'gz2_filename_mapping.csv'
+        if mapping_path.exists():
+            logger.info(f"Loading filename mapping from {mapping_path}")
+            mapping_df = pd.read_csv(mapping_path)
+            # Create dictionary mapping objid to asset_id
+            self.objid_to_asset = dict(zip(mapping_df['objid'], mapping_df['asset_id']))
+            logger.info(f"Loaded mapping for {len(self.objid_to_asset)} objects")
+        else:
+            logger.warning(f"Mapping file not found at {mapping_path}, will try direct objid matching")
+            self.objid_to_asset = {}
+    
     def prepare_labels(self):
         """Extract and normalize morphology vote fractions"""
         logger.info("Preparing morphology labels...")
         
-        # Define Galaxy Zoo 2 decision tree tasks
-        self.tasks = {
-            't01_smooth_or_features': ['smooth', 'features_or_disk', 'star_or_artifact'],
-            't02_edgeon': ['yes', 'no'],
-            't03_bar': ['yes', 'no'],
-            't04_spiral': ['yes', 'no'],
-            't05_bulge_prominence': ['no_bulge', 'obvious', 'dominant']
-        }
-        
-        # Calculate vote fractions for each task
+        # Use the existing fraction columns from the catalog
         self.label_columns = []
         
-        for task, responses in self.tasks.items():
-            # Get vote count columns for this task
-            vote_cols = []
-            for i, response in enumerate(responses):
-                col_name = f'{task}_a{i+1}_{response}_count'
-                if col_name in self.catalog.columns:
-                    vote_cols.append(col_name)
-            
-            if vote_cols:
-                # Calculate total votes for normalization
-                total_votes = self.catalog[vote_cols].sum(axis=1).clip(lower=1)
-                
-                # Calculate fractions
-                for i, col in enumerate(vote_cols):
-                    frac_col = f'{task}_frac_{i}'
-                    self.catalog[frac_col] = self.catalog[col] / total_votes
-                    self.label_columns.append(frac_col)
+        # Find all fraction columns
+        for col in self.catalog.columns:
+            if '_fraction' in col and col.startswith('t'):
+                self.label_columns.append(col)
         
         logger.info(f"Created {len(self.label_columns)} label columns")
         
-        # Store vote counts for weighting
-        self.catalog['total_votes'] = 0
-        for task in self.tasks.keys():
-            vote_cols = [col for col in self.catalog.columns if task in col and '_count' in col]
-            if vote_cols:
-                self.catalog['total_votes'] += self.catalog[vote_cols].sum(axis=1)
+        # Use existing total_votes or total_classifications column for weighting
+        if 'total_votes' not in self.catalog.columns:
+            if 'total_classifications' in self.catalog.columns:
+                self.catalog['total_votes'] = self.catalog['total_classifications']
+            else:
+                # Fallback: sum all count columns
+                count_cols = [col for col in self.catalog.columns if '_count' in col]
+                if count_cols:
+                    self.catalog['total_votes'] = self.catalog[count_cols].sum(axis=1)
+                else:
+                    self.catalog['total_votes'] = 1.0  # Default weight
     
     def filter_available_images(self):
         """Filter catalog to only include galaxies with available images"""
@@ -108,12 +107,42 @@ class GalaxyZooDataset(Dataset):
         available_indices = []
         for idx, row in self.catalog.iterrows():
             objid = row['dr7objid']
-            image_path = self.image_dir / f'sdss_{objid}.fits'
-            if image_path.exists():
-                available_indices.append(idx)
+            
+            # Use mapping to get asset_id if available
+            if objid in self.objid_to_asset:
+                asset_id = self.objid_to_asset[objid]
+                image_path = self.image_dir / f'{asset_id}.jpg'
+                if image_path.exists():
+                    available_indices.append(idx)
+            else:
+                # Fallback: try direct objid matching
+                fits_path = self.image_dir / f'sdss_{objid}.fits'
+                jpg_path = self.image_dir / f'{objid}.jpg'
+                if fits_path.exists() or jpg_path.exists():
+                    available_indices.append(idx)
         
         logger.info(f"Found {len(available_indices)} galaxies with available images")
         self.catalog = self.catalog.loc[available_indices].reset_index(drop=True)
+    
+    def load_image(self, objid):
+        """Load image using asset_id mapping or direct objid"""
+        # Use mapping to get asset_id if available
+        if objid in self.objid_to_asset:
+            asset_id = self.objid_to_asset[objid]
+            jpg_path = self.image_dir / f'{asset_id}.jpg'
+            if jpg_path.exists():
+                return self.load_jpg_image(jpg_path)
+        
+        # Fallback: try direct objid matching
+        fits_path = self.image_dir / f'sdss_{objid}.fits'
+        if fits_path.exists():
+            return self.load_fits_image(fits_path)
+        
+        jpg_path = self.image_dir / f'{objid}.jpg'
+        if jpg_path.exists():
+            return self.load_jpg_image(jpg_path)
+        
+        return None
     
     def load_fits_image(self, fits_path):
         """Load and process FITS image"""
@@ -143,6 +172,14 @@ class GalaxyZooDataset(Dataset):
             logger.error(f"Error loading {fits_path}: {e}")
             return None
     
+    def load_jpg_image(self, jpg_path):
+        """Load JPG image"""
+        try:
+            return Image.open(jpg_path).convert('RGB')
+        except Exception as e:
+            logger.error(f"Error loading {jpg_path}: {e}")
+            return None
+    
     def create_cache(self):
         """Create HDF5 cache for preprocessed images"""
         logger.info(f"Creating cache at {self.cache_file}")
@@ -165,8 +202,7 @@ class GalaxyZooDataset(Dataset):
                 objid = row['dr7objid']
                 
                 # Load image
-                image_path = self.image_dir / f'sdss_{objid}.fits'
-                image = self.load_fits_image(image_path)
+                image = self.load_image(objid)
                 
                 if image is not None:
                     # Resize to standard size
@@ -250,8 +286,7 @@ class GalaxyZooDataset(Dataset):
         objid = row['dr7objid']
         
         # Load image
-        image_path = self.image_dir / f'sdss_{objid}.fits'
-        image = self.load_fits_image(image_path)
+        image = self.load_image(objid)
         
         if image is None:
             # Return dummy data if image can't be loaded
@@ -308,7 +343,7 @@ def create_data_loaders(config_path, sample_size=None):
     training_config = config['training']
     
     # Load dataset
-    catalog_path = Path(data_config['catalogs_dir']) / 'gz2_hart16.csv'
+    catalog_path = Path(data_config['catalogs_dir']) / 'gz2_master_catalog.csv'
     if not catalog_path.exists():
         # Try sample catalog
         sample_catalogs = list(Path(data_config['catalogs_dir']).glob('gz2_sample_*.csv'))
