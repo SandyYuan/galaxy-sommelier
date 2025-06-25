@@ -8,6 +8,7 @@ data:
   hst_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/hst"
   processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
   catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
+  catalog_name: "gz2_master_catalog_corrected.csv"  # Use corrected catalog with 240k galaxies
 
 # Model configuration
 model:

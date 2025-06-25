@@ -343,15 +343,19 @@ def create_data_loaders(config_path, sample_size=None):
     training_config = config['training']
     
     # Load dataset
-    catalog_path = Path(data_config['catalogs_dir']) / 'gz2_master_catalog.csv'
+    catalog_name = data_config.get('catalog_name', 'gz2_master_catalog.csv')
+    catalog_path = Path(data_config['catalogs_dir']) / catalog_name
     if not catalog_path.exists():
-        # Try sample catalog
-        sample_catalogs = list(Path(data_config['catalogs_dir']).glob('gz2_sample_*.csv'))
-        if sample_catalogs:
-            catalog_path = sample_catalogs[0]
-            logger.info(f"Using sample catalog: {catalog_path}")
-        else:
-            raise FileNotFoundError("No Galaxy Zoo catalog found")
+        # Fallback to default catalog
+        catalog_path = Path(data_config['catalogs_dir']) / 'gz2_master_catalog.csv'
+        if not catalog_path.exists():
+            # Try sample catalog
+            sample_catalogs = list(Path(data_config['catalogs_dir']).glob('gz2_sample_*.csv'))
+            if sample_catalogs:
+                catalog_path = sample_catalogs[0]
+                logger.info(f"Using sample catalog: {catalog_path}")
+            else:
+                raise FileNotFoundError("No Galaxy Zoo catalog found")
     
     # Create full dataset
     full_dataset = GalaxyZooDataset(
