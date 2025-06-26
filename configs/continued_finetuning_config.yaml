@@ -1,0 +1,104 @@
+# Galaxy Sommelier Continued Fine-tuning Configuration
+# Resume training from best checkpoint with optimized parameters
+
+# Data paths
+data:
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  desi_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/desi"
+  hst_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/hst"
+  processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
+  catalog_name: "gz2_master_catalog_corrected.csv"
+
+# Model configuration
+model:
+  name: "facebook/dinov2-base"
+  num_outputs: 74  # Galaxy Zoo 2 vote fractions (all fraction columns)
+  dropout_rate: 0.2
+  freeze_backbone: false  # Continue full fine-tuning
+
+# Optimized training parameters for continued training
+training:
+  batch_size: 16  
+  learning_rate: 1e-5  # Base learning rate
+  backbone_lr: 1e-5   # Increased from 5e-6 - less conservative
+  head_lr: 2e-4       # Increased from 1e-4 - more aggressive for head
+  num_epochs: 25      # Extended from 10 - train much longer
+  warmup_steps: 1000  # Shorter warmup since resuming from trained model
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  
+# Learning rate scheduling - use plateau scheduler instead of cosine
+lr_schedule:
+  type: "reduce_on_plateau"  # Better than cosine for continued training
+  patience: 3                # Reduce LR if no improvement for 3 epochs
+  factor: 0.5               # Reduce LR by half
+  min_lr: 1e-7              # Minimum learning rate
+  monitor: "val_correlation" # Monitor correlation instead of loss
+  
+# Data processing
+preprocessing:
+  image_size: 224
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+  
+# Augmentation (keep current settings that worked well)
+augmentation:
+  rotation_degrees: 180
+  horizontal_flip: true
+  vertical_flip: true
+  brightness_factor: 0.3
+  contrast_factor: 0.3
+  gaussian_blur: true
+  gaussian_noise: true
+
+# Galaxy Zoo tasks
+galaxy_zoo_tasks:
+  t01:
+    responses: ["smooth", "features_or_disk", "star_or_artifact"]
+    description: "Is the galaxy smooth and rounded, or does it have features?"
+  t02:
+    responses: ["edge_on_yes", "edge_on_no"]
+    description: "Could this be a disk viewed edge-on?"
+  t03:
+    responses: ["bar_yes", "bar_no"]
+    description: "Is there a bar feature through the center of the galaxy?"
+  t04:
+    responses: ["spiral_yes", "spiral_no"]
+    description: "Is there any sign of a spiral arm pattern?"
+  t05:
+    responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
+    description: "How prominent is the central bulge?"
+
+# Experiment tracking
+wandb:
+  project: "galaxy-sommelier"
+  entity: "sihany"
+  log_freq: 50
+  tags: ["continued_training", "optimized_lr", "extended_epochs"]
+
+# Hardware
+device: "cuda"
+num_workers: 4
+pin_memory: true
+
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results"
+
+# Resume from best checkpoint
+pretrained_checkpoint: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt"
+
+# Logging
+logging:
+  level: "INFO"
+  save_frequency: 2  # Save model every 2 epochs
+  
+# Improved early stopping
+early_stopping:
+  patience: 8              # Increased patience - give more time to improve
+  min_delta: 0.0005       # Smaller threshold for subtle improvements
+  monitor: "val_correlation"  # Focus on correlation improvement
+  mode: "max"             # Maximize correlation (instead of minimize loss)
+  restore_best_weights: true 
