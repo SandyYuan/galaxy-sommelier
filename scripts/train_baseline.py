@@ -34,10 +34,11 @@ logger = logging.getLogger(__name__)
 class GalaxyTrainer:
     """Main training class for Galaxy Sommelier"""
     
-    def __init__(self, config_path, sample_size=None, use_wandb=False):
+    def __init__(self, config_path, sample_size=None, use_wandb=False, resume=True):
         self.config_path = Path(config_path)
         self.sample_size = sample_size
         self.use_wandb = use_wandb
+        self.resume = resume
         
         # Load configuration
         with open(self.config_path, 'r') as f:
@@ -82,6 +83,10 @@ class GalaxyTrainer:
         self.best_val_loss = float('inf')
         self.training_history = []
         
+        # Try to resume from checkpoint if requested
+        if self.resume:
+            self.load_latest_checkpoint()
+        
     def setup_model(self):
         """Initialize the Galaxy Sommelier model"""
         logger.info("Setting up model...")
@@ -97,6 +102,22 @@ class GalaxyTrainer:
         )
         
         self.model.to(self.device)
+        
+        # Load from pretrained checkpoint if specified
+        if 'pretrained_checkpoint' in self.config:
+            checkpoint_path = self.config['pretrained_checkpoint']
+            if os.path.exists(checkpoint_path):
+                logger.info(f"Loading pretrained checkpoint from {checkpoint_path}")
+                checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+                
+                if 'model_state_dict' in checkpoint:
+                    self.model.load_state_dict(checkpoint['model_state_dict'])
+                else:
+                    self.model.load_state_dict(checkpoint)
+                
+                logger.info("Successfully loaded pretrained checkpoint")
+            else:
+                logger.warning(f"Pretrained checkpoint not found: {checkpoint_path}")
         
         # Count parameters
         param_info = count_parameters(self.model)
@@ -125,27 +146,116 @@ class GalaxyTrainer:
             })
     
     def setup_optimizer(self):
-        """Setup optimizer and learning rate scheduler"""
+        """Setup optimizer and learning rate scheduler with differential learning rates"""
         training_config = self.config['training']
         
-        # Optimizer
-        self.optimizer = optim.AdamW(
-            self.model.parameters(),
-            lr=float(training_config['learning_rate']),
-            weight_decay=float(training_config['weight_decay'])
-        )
+        # Check if we're doing full fine-tuning with different LRs
+        if 'backbone_lr' in training_config and 'head_lr' in training_config:
+            # Differential learning rates for backbone vs head
+            backbone_params = []
+            head_params = []
+            
+            for name, param in self.model.named_parameters():
+                if 'dinov2' in name:  # Backbone parameters
+                    backbone_params.append(param)
+                else:  # Head parameters
+                    head_params.append(param)
+            
+            # Create parameter groups with different learning rates
+            param_groups = [
+                {
+                    'params': backbone_params,
+                    'lr': float(training_config['backbone_lr']),
+                    'weight_decay': float(training_config['weight_decay'])
+                },
+                {
+                    'params': head_params,
+                    'lr': float(training_config['head_lr']),
+                    'weight_decay': float(training_config['weight_decay'])
+                }
+            ]
+            
+            self.optimizer = optim.AdamW(param_groups)
+            
+            logger.info(f"Differential Learning Rates:")
+            logger.info(f"  Backbone LR: {training_config['backbone_lr']}")
+            logger.info(f"  Head LR: {training_config['head_lr']}")
+            
+        else:
+            # Standard single learning rate
+            self.optimizer = optim.AdamW(
+                self.model.parameters(),
+                lr=float(training_config['learning_rate']),
+                weight_decay=float(training_config['weight_decay'])
+            )
+            
+            logger.info(f"Single Learning Rate: {training_config['learning_rate']}")
         
         # Scheduler
         total_steps = len(self.train_loader) * training_config['num_epochs']
         
+        # Use base learning rate for scheduler
+        base_lr = float(training_config.get('backbone_lr', training_config['learning_rate']))
+        
         self.scheduler = CosineAnnealingLR(
             self.optimizer,
             T_max=total_steps,
-            eta_min=float(training_config['learning_rate']) * 0.01
+            eta_min=base_lr * 0.01
         )
         
-        logger.info(f"Optimizer: AdamW, LR: {training_config['learning_rate']}")
         logger.info(f"Scheduler: CosineAnnealingLR, Total steps: {total_steps}")
+    
+    def load_latest_checkpoint(self):
+        """Load the most recent checkpoint to resume training"""
+        checkpoint_dir = Path(self.config.get('checkpoint_dir', './models'))
+        if not checkpoint_dir.exists():
+            logger.info("No checkpoint directory found, starting from scratch")
+            return
+        
+        # Find all checkpoint files
+        checkpoint_files = list(checkpoint_dir.glob('checkpoint_epoch_*.pt'))
+        if not checkpoint_files:
+            logger.info("No checkpoint files found, starting from scratch")
+            return
+        
+        # Sort by epoch number and get the latest
+        checkpoint_files.sort(key=lambda x: int(x.stem.split('_')[-1]))
+        latest_checkpoint = checkpoint_files[-1]
+        
+        logger.info(f"Loading checkpoint from {latest_checkpoint}")
+        
+        try:
+            checkpoint = torch.load(latest_checkpoint, map_location=self.device, weights_only=False)
+            
+            # Load model state
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            
+            # Load optimizer state
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            
+            # Load training state
+            self.current_epoch = checkpoint['epoch'] + 1  # Start from next epoch
+            self.best_val_loss = checkpoint.get('val_loss', float('inf'))
+            
+            # Load scaler state if available
+            if 'scaler_state_dict' in checkpoint:
+                self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
+            
+            # Load training history if available
+            history_path = Path(self.config.get('results_dir', './results')) / 'training_history.json'
+            if history_path.exists():
+                with open(history_path, 'r') as f:
+                    self.training_history = json.load(f)
+            
+            logger.info(f"Resumed training from epoch {self.current_epoch}")
+            logger.info(f"Best validation loss so far: {self.best_val_loss:.4f}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to load checkpoint: {e}")
+            logger.info("Starting training from scratch")
+            self.current_epoch = 0
+            self.best_val_loss = float('inf')
+            self.training_history = []
     
     def train_epoch(self):
         """Train for one epoch"""
@@ -282,20 +392,26 @@ class GalaxyTrainer:
         checkpoint_dir = Path(self.config.get('checkpoint_dir', './models'))
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
+        # Create checkpoint with additional state
+        checkpoint = {
+            'epoch': self.current_epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scaler_state_dict': self.scaler.state_dict(),
+            'val_loss': metrics['val_loss'],
+            'config': self.config,
+            'training_history': self.training_history
+        }
+        
         # Regular checkpoint
         checkpoint_path = checkpoint_dir / f'checkpoint_epoch_{self.current_epoch:03d}.pt'
-        save_model_checkpoint(
-            self.model, self.optimizer, self.current_epoch, 
-            metrics['val_loss'], checkpoint_path
-        )
+        torch.save(checkpoint, checkpoint_path)
+        logger.info(f"Checkpoint saved: {checkpoint_path}")
         
         # Best model checkpoint
         if is_best:
             best_path = checkpoint_dir / 'best_model.pt'
-            save_model_checkpoint(
-                self.model, self.optimizer, self.current_epoch,
-                metrics['val_loss'], best_path
-            )
+            torch.save(checkpoint, best_path)
             logger.info(f"New best model saved with validation loss: {metrics['val_loss']:.4f}")
     
     def train(self, num_epochs=None):
@@ -303,9 +419,16 @@ class GalaxyTrainer:
         if num_epochs is None:
             num_epochs = self.config['training']['num_epochs']
         
-        logger.info(f"Starting training for {num_epochs} epochs")
+        start_epoch = self.current_epoch
+        total_epochs = start_epoch + num_epochs
         
-        for epoch in range(num_epochs):
+        if start_epoch > 0:
+            logger.info(f"Resuming training from epoch {start_epoch + 1}")
+            logger.info(f"Training for {num_epochs} more epochs (until epoch {total_epochs})")
+        else:
+            logger.info(f"Starting training for {num_epochs} epochs")
+        
+        for epoch in range(start_epoch, total_epochs):
             self.current_epoch = epoch
             
             # Train epoch
@@ -365,6 +488,8 @@ def main():
                        help="Use Weights & Biases for logging")
     parser.add_argument("--epochs", type=int, default=None,
                        help="Number of epochs to train")
+    parser.add_argument("--no-resume", action="store_true",
+                       help="Start training from scratch instead of resuming")
     
     args = parser.parse_args()
     
@@ -378,7 +503,8 @@ def main():
         trainer = GalaxyTrainer(
             config_path=args.config,
             sample_size=args.sample_size,
-            use_wandb=args.wandb
+            use_wandb=args.wandb,
+            resume=not args.no_resume
         )
         
         # Start training

@@ -1,0 +1,24 @@
+Galaxy Sommelier Benchmark Results
+========================================
+
+Overall Performance:
+  MSE: 0.033138
+  MAE: 0.106447
+  Correlation: 0.8496
+  R²: 0.7218
+  Samples: 1772892
+
+Top 10 Performing Tasks (by correlation):
+   1. task_03: r=0.969, MAE=0.0611, MSE=0.006472
+   2. task_02: r=0.968, MAE=0.0609, MSE=0.006391
+   3. task_01: r=0.966, MAE=0.0639, MSE=0.006880
+   4. task_00: r=0.965, MAE=0.0641, MSE=0.006871
+   5. task_35: r=0.963, MAE=0.0478, MSE=0.010577
+   6. task_34: r=0.962, MAE=0.0486, MSE=0.010789
+   7. task_07: r=0.939, MAE=0.0689, MSE=0.013165
+   8. task_06: r=0.935, MAE=0.0718, MSE=0.013969
+   9. task_27: r=0.933, MAE=0.0590, MSE=0.006823
+  10. task_29: r=0.933, MAE=0.0590, MSE=0.006823
+
+Main Morphology Classification:
+  Accuracy: 0.625
