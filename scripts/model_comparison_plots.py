@@ -40,6 +40,84 @@ class ModelComparison:
             'Bar Detection': 'task_10',   # t03_bar_a06_bar_fraction
         }
         
+        # Task ID to human-readable name mapping
+        self.task_names = {
+            'task_00': 'Smooth',
+            'task_01': 'Featured/Disk', 
+            'task_02': 'Star/Artifact',
+            'task_03': 'Edge-on No',
+            'task_04': 'Edge-on Yes',
+            'task_05': 'Edge-on (other)',
+            'task_06': 'Bar No',
+            'task_07': 'Bar Yes',
+            'task_08': 'Spiral No',
+            'task_09': 'Spiral Yes',
+            'task_10': 'Bar Fraction',
+            'task_11': 'Bar (other)',
+            'task_12': 'Bulge None',
+            'task_13': 'Bulge Obvious',
+            'task_14': 'Spiral Fraction',
+            'task_15': 'Spiral (other)',
+            'task_16': 'Bulge Shape Round',
+            'task_17': 'Bulge Shape Boxy',
+            'task_18': 'Arms Winding Tight',
+            'task_19': 'Arms Winding Medium',
+            'task_20': 'Arms Number 1',
+            'task_21': 'Arms Number 2',
+            'task_22': 'Arms Number 3',
+            'task_23': 'Arms Number 4',
+            'task_24': 'Arms Number >4',
+            'task_25': 'Arms Number (other)',
+            'task_26': 'Odd Yes',
+            'task_27': 'Odd No',
+            'task_28': 'Odd Fraction',
+            'task_29': 'Odd (other)',
+            'task_30': 'Round Completely',
+            'task_31': 'Round In-between',
+            'task_32': 'Round Cigar-shaped',
+            'task_33': 'Round (other)',
+            'task_34': 'Edge-on Fraction',
+            'task_35': 'Edge-on (other)',
+            'task_36': 'Merging None',
+            'task_37': 'Merging Minor',
+            'task_38': 'Merging Major',
+            'task_39': 'Merging (other)',
+            'task_40': 'Dustlane Yes',
+            'task_41': 'Dustlane No',
+            'task_42': 'Discuss This',
+            'task_43': 'Discuss (other)',
+            'task_44': 'Clumps Yes',
+            'task_45': 'Clumps No',
+            'task_46': 'Clumps Count 1',
+            'task_47': 'Clumps Count 2',
+            'task_48': 'Clumps Count 3',
+            'task_49': 'Clumps Count 4+',
+            'task_50': 'Clumps Symmetry Yes',
+            'task_51': 'Clumps Symmetry No',
+            'task_52': 'Clumps Embed Yes',
+            'task_53': 'Clumps Embed No',
+            'task_54': 'Disk Edge-on Yes',
+            'task_55': 'Disk Edge-on No',
+            'task_56': 'Has Spiral Arms',
+            'task_57': 'No Spiral Arms',
+            'task_58': 'Spiral Tight',
+            'task_59': 'Spiral Medium',
+            'task_60': 'Spiral Loose',
+            'task_61': 'Spiral (other)',
+            'task_62': 'Clumpy Arms Yes',
+            'task_63': 'Clumpy Arms No',
+            'task_64': 'Overlap Yes',
+            'task_65': 'Overlap No',
+            'task_66': 'Lens/Ring Yes',
+            'task_67': 'Lens/Ring No',
+            'task_68': 'Clumps Brightest',
+            'task_69': 'Clumps Dominated',
+            'task_70': 'Problem Yes',
+            'task_71': 'Problem No',
+            'task_72': 'Artifact Yes',
+            'task_73': 'Artifact No'
+        }
+        
         # Load all model results
         self.load_all_results()
         
@@ -125,7 +203,9 @@ class ModelComparison:
                            ha='center', va='center', fontsize=8, fontweight='bold')
                 bottom += r2_val
             
-            ax.set_title(f'{task_id}', fontsize=10)
+            # Use human-readable task name
+            task_name = self.task_names.get(task_id, task_id)
+            ax.set_title(f'{task_name}', fontsize=9, wrap=True)
             ax.set_xlim(-0.5, 0.5)
             ax.set_ylim(0, 1.0)
             ax.set_xticks([])
