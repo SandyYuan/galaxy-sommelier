@@ -1,4 +1,4 @@
-# Galaxy Sommelier: Deep Learning for Galaxy Morphology Classification
+# Galaxy Sommelier: Vision Transformer for Galaxy Morphology Classification
 
 A state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning for robust generalization across astronomical surveys.
 
@@ -65,7 +65,7 @@ The plots above demonstrate the dramatic improvement from pretrained baseline th
 - **Mixed Precision Training**: Efficient training with automatic mixed precision
 - **Comprehensive Logging**: Integration with Weights & Biases for experiment tracking
 - **Flexible Configuration**: YAML-based configuration system
-
+<!-- 
 ## Quick Start
 
 ### 1. Environment Setup
@@ -97,7 +97,7 @@ python scripts/train_baseline.py --sample-size 100 --epochs 5
 
 # Full training with W&B logging
 python scripts/train_baseline.py --wandb
-```
+``` -->
 
 ## Project Structure
 
@@ -120,7 +120,7 @@ galaxy-sommelier/
 └── README.md              # This file
 ```
 
-## Configuration
+<!-- ## Configuration
 
 The project uses YAML configuration files for easy parameter management. Key settings:
 
@@ -134,7 +134,7 @@ The project uses YAML configuration files for easy parameter management. Key set
 - **Scratch Directory**: `/pscratch/sd/s/sihany/galaxy-sommelier-data/`
 - **SDSS Images**: `data/sdss/`
 - **Catalogs**: `data/catalogs/`
-- **Processed Data**: `data/processed/`
+- **Processed Data**: `data/processed/` -->
 
 ## Hardware Requirements
 
@@ -149,14 +149,14 @@ The project uses YAML configuration files for easy parameter management. Key set
 - [ ] Distribution shift analysis
 - [ ] OOD testing framework
 
-## Contributing
+<!-- ## Contributing
 
-This project follows the plan outlined in `plan.txt`. Please refer to the plan for detailed implementation roadmap and contribute according to the phase structure.
+This project follows the plan outlined in `plan.txt`. Please refer to the plan for detailed implementation roadmap and contribute according to the phase structure. -->
 
 ## License
 
 Research use only. Please cite appropriately if using this code for academic purposes.
-
+<!-- 
 ## Contact
 
-Project developed as part of galaxy morphology research at NERSC.
+Project developed as part of galaxy morphology research at NERSC. -->
