@@ -42,7 +42,7 @@ The model successfully learned to classify most galaxy morphological characteris
 
 The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how the final model captures the underlying data distributions for key morphological features.
 
-## Phase 1: Foundation Setup ✅
+<!-- ## Phase 1: Foundation Setup ✅
 
 **Status**: Implementation Complete
 
@@ -55,7 +55,7 @@ The plots above demonstrate the improvement from pretrained baseline through hea
 - [x] Data processing pipeline (`scripts/data_processing.py`)
 - [x] Training infrastructure (`scripts/train_baseline.py`)
 - [x] Configuration management (`configs/base_config.yaml`)
-- [x] Requirements specification (`requirements.txt`)
+- [x] Requirements specification (`requirements.txt`) -->
 
 ### Key Features
 
@@ -136,7 +136,7 @@ The project uses YAML configuration files for easy parameter management. Key set
 - **Catalogs**: `data/catalogs/`
 - **Processed Data**: `data/processed/` -->
 
-## Hardware Requirements
+<!-- ## Hardware Requirements
 
 - **GPU**: NVIDIA A100 (available on NERSC Perlmutter)
 - **Memory**: 16GB+ RAM recommended
@@ -147,7 +147,7 @@ The project uses YAML configuration files for easy parameter management. Key set
 - [ ] DESI Legacy Imaging data collection
 - [ ] Cross-survey matching and validation
 - [ ] Distribution shift analysis
-- [ ] OOD testing framework
+- [ ] OOD testing framework -->
 
 <!-- ## Contributing
 
