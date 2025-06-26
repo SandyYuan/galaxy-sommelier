@@ -6,6 +6,32 @@ A state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning for rob
 
 Galaxy Sommelier leverages the power of Vision Transformers (DINOv2) to classify galaxy morphologies using Galaxy Zoo citizen science data. The model is designed to generalize well across different astronomical surveys including SDSS, DESI Legacy Imaging, and HST.
 
+## Results
+
+Our training progression demonstrates significant improvements across all morphological classification tasks:
+
+### Performance Summary
+- **Overall Correlation**: 0.85 (R² = 0.72)
+- **Mean Absolute Error**: 0.106 
+- **Main Morphology Classification Accuracy**: 62.5%
+
+### Training Stage Progression
+| Stage | Overall Correlation | Overall R² | MAE | Notes |
+|-------|-------------------|------------|-----|--------|
+| Pretrained Baseline | 0.116 | 0.013 | 0.403 | Poor performance across all features |
+| Head Training | 0.759 | 0.576 | 0.153 | Major improvement, learned basic concepts |
+| Full Fine-tuning | **0.850** | **0.722** | **0.106** | Best performance, refined all features |
+
+### Key Morphological Features Performance
+- **Disk Fraction** (smooth vs featured): r = 0.968 (excellent)
+- **Edge-on Detection**: r = 0.935 (excellent) 
+- **Odd Features Detection**: r = 0.932 (excellent)
+- **Spiral Detection**: r = 0.857 (very good)
+- **Bar Detection**: r = 0.772 (good)
+- **Bulge Dominance**: r = 0.506 (moderate - most challenging feature)
+
+The model successfully learned to classify most galaxy morphological characteristics, with geometric and structural features showing the strongest performance. Bulge prominence assessment remains the most challenging task, likely requiring additional specialized techniques.
+
 ## Phase 1: Foundation Setup ✅
 
 **Status**: Implementation Complete
