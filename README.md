@@ -35,12 +35,12 @@ The model successfully learned to classify most galaxy morphological characteris
 ### Performance Visualization
 
 **Overall Performance Comparison**
-![Performance Summary](comparison_plots/performance_summary.png)
+![Performance Summary](benchmark_results/comparison_plots/performance_summary.png)
 
 **Distribution Comparison: True vs Predicted**
-![Distribution Comparison](comparison_plots/distribution_comparison.png)
+![Distribution Comparison](benchmark_results/comparison_plots/distribution_comparison.png)
 
-The plots above demonstrate the dramatic improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how well the final model captures the underlying data distributions for key morphological features.
+The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how the final model captures the underlying data distributions for key morphological features.
 
 ## Phase 1: Foundation Setup ✅
 
