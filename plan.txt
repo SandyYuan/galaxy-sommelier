@@ -5,7 +5,7 @@ Build a state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning t
 
 **Duration**: 8-12 weeks  
 **Compute Resources**: NERSC Perlmutter (A100 GPUs)  
-**Datasets**: Galaxy Zoo (SDSS, DES, DECaLS, HST, Euclid)  
+**Datasets**: Galaxy Zoo (SDSS, DES, DECaLS, HST, UKIDSS)  
 **Target**: Universal cross-survey morphology classifier  
 **Data Storage**: `/pscratch/sd/s/sihany/galaxy-sommelier-data/`
 
@@ -308,7 +308,7 @@ class GalaxyTrainer:
 ## Phase 2: Multi-Survey Domain Adaptation (Week 3-6) 🚧 IN PROGRESS
 
 ### Key Objectives
-1. **Collect multi-survey Galaxy Zoo datasets** (SDSS, DES, DECaLS, HST, Euclid)
+1. **Collect multi-survey Galaxy Zoo datasets** (SDSS, DES, DECaLS, HST, UKIDSS)
 2. **Quantify domain shift** between different astronomical surveys
 3. **Develop survey-agnostic training strategy** using mixed datasets
 4. **Create universal morphology classifier** that generalizes across surveys
@@ -357,8 +357,8 @@ datasets = {
         'quality': 'space-based',
         'status': 'PLANNED'
     },
-    'euclid': {
-        'source': 'Galaxy Zoo Euclid',
+            'ukidss': {
+            'source': 'Galaxy Zoo UKIDSS',
         'n_galaxies': '~10,000',
         'resolution': '0.1"/pixel', 
         'quality': 'space-based',
@@ -374,28 +374,62 @@ datasets = {
 domain_shift_experiments = [
     ('sdss', 'des'),      # Ground → Ground (small shift expected)
     ('sdss', 'hst'),      # Ground → Space (large shift expected)  
-    ('sdss', 'euclid'),   # Ground → Space (largest shift expected)
-    ('hst', 'euclid'),    # Space → Space (small shift expected)
+                ('sdss', 'ukidss'),   # Ground → Space (largest shift expected)
+            ('hst', 'ukidss'),    # Space → Space (small shift expected)
 ]
+
+# Quality-controlled experiments to isolate survey-invariance effects
+def degrade_hst_to_ground_quality(hst_image):
+    """Artificially degrade HST to match ground-based quality"""
+    # Convolve with seeing disk to match SDSS resolution
+    seeing_psf = create_gaussian_psf(fwhm=1.5)  # Typical ground seeing
+    degraded = convolve(hst_image, seeing_psf)
+    
+    # Add realistic noise to match SDSS SNR
+    degraded = add_poisson_noise(degraded, snr_target=10)
+    
+    # Resample to ground resolution
+    degraded = downsample(degraded, factor=8)  # 0.05" → 0.4"
+    
+    return degraded
+
+# Disentangle survey diversity from data quality effects
+quality_controlled_experiments = [
+    # Baseline: single survey, original quality
+    {'sdss': 30000, 'test': 'ukidss'},
+    
+    # Multi-survey, original quality  
+    {'sdss': 15000, 'hst': 15000, 'test': 'ukidss'},
+    
+    # Multi-survey, quality-matched (degraded HST)
+    {'sdss': 15000, 'hst_degraded': 15000, 'test': 'ukidss'},
+    
+    # Control: degraded HST only
+    {'hst_degraded': 30000, 'test': 'ukidss'}
+]
+
+# Key insight: If degraded HST images (matched to SDSS quality) still improve 
+# cross-survey generalization, we can conclude that survey diversity itself - 
+# not image quality - drives the performance gains.
 
 # Progressive multi-survey training
 progressive_experiments = [
     {
         'name': 'sdss_only',
         'train_surveys': ['sdss'],
-        'test_survey': 'euclid',
+        'test_survey': 'ukidss',
         'expected_performance': 'r ~ 0.4-0.6'
     },
     {
         'name': 'sdss_des',
         'train_surveys': ['sdss', 'des'],
-        'test_survey': 'euclid', 
+        'test_survey': 'ukidss', 
         'expected_performance': 'r ~ 0.5-0.7'
     },
     {
         'name': 'sdss_des_hst',
         'train_surveys': ['sdss', 'des', 'hst'],
-        'test_survey': 'euclid',
+        'test_survey': 'ukidss',
         'expected_performance': 'r ~ 0.7-0.8'
     }
 ]
@@ -407,7 +441,7 @@ progressive_experiments = [
 # Quality-weighted sampling for robust learning
 survey_weights = {
     'hst': 2.5,      # Highest quality → higher weight
-    'euclid': 2.0,   # Space-based (held-out)
+    'ukidss': 2.0,   # Space-based (held-out)
     'des': 1.3,      # Good seeing
     'decals': 1.1,   # Moderate quality
     'sdss': 1.0      # Baseline
@@ -415,7 +449,7 @@ survey_weights = {
 
 # Multi-stage training approach:
 # Stage 1: Quality-weighted pre-training (10 epochs)
-#   - Higher weight for HST/Euclid
+#   - Higher weight for HST/UKIDSS
 #   - Learn high-quality morphological features
 # Stage 2: Balanced fine-tuning (15 epochs)  
 #   - Equal representation across surveys
@@ -425,7 +459,7 @@ survey_weights = {
 #### Step 2.4: Cross-Survey Evaluation Framework
 ```python
 class CrossSurveyEvaluator:
-    def __init__(self, surveys, held_out_survey='euclid'):
+    def __init__(self, surveys, held_out_survey='ukidss'):
         self.surveys = surveys
         self.held_out = held_out_survey
         
@@ -467,7 +501,7 @@ class CrossSurveyEvaluator:
 - [ ] Domain shift quantification across all survey pairs  
 - [ ] Mixed training implementation with quality weighting
 - [ ] Cross-survey evaluation framework
-- [ ] Universal morphology classifier achieving >0.8 correlation on held-out Euclid data
+- [ ] Universal morphology classifier achieving >0.8 correlation on held-out UKIDSS data
 
 ---
 
