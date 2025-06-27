@@ -1,0 +1,534 @@
+{
+  "SDSS": {
+    "overall": {
+      "mse": 0.02478819154202938,
+      "mae": 0.08522346615791321,
+      "correlation": 0.8927944803250715,
+      "r_squared": 0.7970819840989144,
+      "n_samples": 1000
+    },
+    "per_task": {
+      "t01_smooth_or_features_a01_smooth_fraction": {
+        "correlation": 0.9825703139992494,
+        "mse": 0.005672454833984375,
+        "mae": 0.05763985216617584,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a01_smooth_weighted_fraction": {
+        "correlation": 0.9830279978175114,
+        "mse": 0.0057594203390181065,
+        "mae": 0.05828385800123215,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a02_features_or_disk_fraction": {
+        "correlation": 0.9862548649138351,
+        "mse": 0.004876128397881985,
+        "mae": 0.05220458284020424,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a02_features_or_disk_weighted_fraction": {
+        "correlation": 0.9863959286892452,
+        "mse": 0.00496456166729331,
+        "mae": 0.05244208499789238,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a03_star_or_artifact_fraction": {
+        "correlation": 0.6109326396629693,
+        "mse": 0.0011217754799872637,
+        "mae": 0.025510074570775032,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a03_star_or_artifact_weighted_fraction": {
+        "correlation": 0.6564855462387201,
+        "mse": 0.0009079431183636189,
+        "mae": 0.02170695550739765,
+        "n_samples": 1000
+      },
+      "t02_edgeon_a04_yes_fraction": {
+        "correlation": 0.8559787281616588,
+        "mse": 0.009951258078217506,
+        "mae": 0.05871271342039108,
+        "n_samples": 1000
+      },
+      "t02_edgeon_a04_yes_weighted_fraction": {
+        "correlation": 0.865930241473267,
+        "mse": 0.009230319410562515,
+        "mae": 0.05447396636009216,
+        "n_samples": 1000
+      },
+      "t02_edgeon_a05_no_fraction": {
+        "correlation": 0.797842861020434,
+        "mse": 0.01512815710157156,
+        "mae": 0.06860316544771194,
+        "n_samples": 1000
+      },
+      "t02_edgeon_a05_no_weighted_fraction": {
+        "correlation": 0.8060888150686245,
+        "mse": 0.01445010956376791,
+        "mae": 0.06469433754682541,
+        "n_samples": 1000
+      },
+      "t03_bar_a06_bar_fraction": {
+        "correlation": 0.9128009707525365,
+        "mse": 0.014779122546315193,
+        "mae": 0.0732923150062561,
+        "n_samples": 1000
+      },
+      "t03_bar_a06_bar_weighted_fraction": {
+        "correlation": 0.9121656114808014,
+        "mse": 0.014892621897161007,
+        "mae": 0.07292185723781586,
+        "n_samples": 1000
+      },
+      "t03_bar_a07_no_bar_fraction": {
+        "correlation": 0.8854580617229437,
+        "mse": 0.02077215537428856,
+        "mae": 0.08640014380216599,
+        "n_samples": 1000
+      },
+      "t03_bar_a07_no_bar_weighted_fraction": {
+        "correlation": 0.8849750776075374,
+        "mse": 0.02086547575891018,
+        "mae": 0.08607602119445801,
+        "n_samples": 1000
+      },
+      "t04_spiral_a08_spiral_fraction": {
+        "correlation": 0.9629269269103512,
+        "mse": 0.013099309988319874,
+        "mae": 0.05822278559207916,
+        "n_samples": 1000
+      },
+      "t04_spiral_a08_spiral_weighted_fraction": {
+        "correlation": 0.9627907357990647,
+        "mse": 0.013146879151463509,
+        "mae": 0.05811556428670883,
+        "n_samples": 1000
+      },
+      "t04_spiral_a09_no_spiral_fraction": {
+        "correlation": 0.9433177482588657,
+        "mse": 0.020188042894005775,
+        "mae": 0.07677653431892395,
+        "n_samples": 1000
+      },
+      "t04_spiral_a09_no_spiral_weighted_fraction": {
+        "correlation": 0.9431766623771499,
+        "mse": 0.020229751244187355,
+        "mae": 0.07678387314081192,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a10_no_bulge_fraction": {
+        "correlation": 0.3722092943713611,
+        "mse": 0.0021269458811730146,
+        "mae": 0.020456688478589058,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a10_no_bulge_weighted_fraction": {
+        "correlation": 0.3776109998946981,
+        "mse": 0.002075005555525422,
+        "mae": 0.020258044824004173,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a11_just_noticeable_fraction": {
+        "correlation": 0.6191963462884773,
+        "mse": 0.032202113419771194,
+        "mae": 0.13533824682235718,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a11_just_noticeable_weighted_fraction": {
+        "correlation": 0.6191033427725867,
+        "mse": 0.032271742820739746,
+        "mae": 0.13537725806236267,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a12_obvious_fraction": {
+        "correlation": 0.397710438095758,
+        "mse": 0.05103015899658203,
+        "mae": 0.16601772606372833,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a12_obvious_weighted_fraction": {
+        "correlation": 0.39818961878639525,
+        "mse": 0.051148537546396255,
+        "mae": 0.16637594997882843,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a13_dominant_fraction": {
+        "correlation": 0.426549673442371,
+        "mse": 0.031203720718622208,
+        "mae": 0.11297862231731415,
+        "n_samples": 1000
+      },
+      "t05_bulge_prominence_a13_dominant_weighted_fraction": {
+        "correlation": 0.4263244803845816,
+        "mse": 0.031228946521878242,
+        "mae": 0.11320450156927109,
+        "n_samples": 1000
+      },
+      "t06_odd_a14_yes_fraction": {
+        "correlation": 0.9281205209941228,
+        "mse": 0.006479606498032808,
+        "mae": 0.05924193933606148,
+        "n_samples": 1000
+      },
+      "t06_odd_a14_yes_weighted_fraction": {
+        "correlation": 0.9286368100538421,
+        "mse": 0.00647007767111063,
+        "mae": 0.059034209698438644,
+        "n_samples": 1000
+      },
+      "t06_odd_a15_no_fraction": {
+        "correlation": 0.928097322983931,
+        "mse": 0.006480569019913673,
+        "mae": 0.05923207849264145,
+        "n_samples": 1000
+      },
+      "t06_odd_a15_no_weighted_fraction": {
+        "correlation": 0.9286790213964455,
+        "mse": 0.006466733757406473,
+        "mae": 0.05902126803994179,
+        "n_samples": 1000
+      },
+      "t07_rounded_a16_completely_round_fraction": {
+        "correlation": 0.8430711826116263,
+        "mse": 0.039349932223558426,
+        "mae": 0.11561387777328491,
+        "n_samples": 1000
+      },
+      "t07_rounded_a16_completely_round_weighted_fraction": {
+        "correlation": 0.8552514306246187,
+        "mse": 0.036492496728897095,
+        "mae": 0.10801409929990768,
+        "n_samples": 1000
+      },
+      "t07_rounded_a17_in_between_fraction": {
+        "correlation": 0.8085458401925003,
+        "mse": 0.04285340756177902,
+        "mae": 0.13465867936611176,
+        "n_samples": 1000
+      },
+      "t07_rounded_a17_in_between_weighted_fraction": {
+        "correlation": 0.8272468319820394,
+        "mse": 0.03933225944638252,
+        "mae": 0.13000845909118652,
+        "n_samples": 1000
+      },
+      "t07_rounded_a18_cigar_shaped_fraction": {
+        "correlation": 0.8282781328995618,
+        "mse": 0.014007460325956345,
+        "mae": 0.03685330972075462,
+        "n_samples": 1000
+      },
+      "t07_rounded_a18_cigar_shaped_weighted_fraction": {
+        "correlation": 0.8614385642319772,
+        "mse": 0.01075094286352396,
+        "mae": 0.0329776369035244,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a19_ring_fraction": {
+        "correlation": 0.7786909745531713,
+        "mse": 0.04064785689115524,
+        "mae": 0.13470914959907532,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a19_ring_weighted_fraction": {
+        "correlation": 0.7934798886256088,
+        "mse": 0.03817736729979515,
+        "mae": 0.12430529296398163,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a20_lens_or_arc_fraction": {
+        "correlation": 0.48969561342407036,
+        "mse": 0.043318312615156174,
+        "mae": 0.14720578491687775,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a20_lens_or_arc_weighted_fraction": {
+        "correlation": 0.48983864942203026,
+        "mse": 0.044122107326984406,
+        "mae": 0.14788390696048737,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a21_disturbed_fraction": {
+        "correlation": 0.6398273427500303,
+        "mse": 0.02006787806749344,
+        "mae": 0.09478868544101715,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a21_disturbed_weighted_fraction": {
+        "correlation": 0.6411434578405819,
+        "mse": 0.02021951787173748,
+        "mae": 0.09563013911247253,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a22_irregular_fraction": {
+        "correlation": 0.5838832964906068,
+        "mse": 0.012819204479455948,
+        "mae": 0.05970068275928497,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a22_irregular_weighted_fraction": {
+        "correlation": 0.5984604768573181,
+        "mse": 0.012179345823824406,
+        "mae": 0.05916012451052666,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a23_other_fraction": {
+        "correlation": 0.5479649463551849,
+        "mse": 0.055151816457509995,
+        "mae": 0.17698876559734344,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a23_other_weighted_fraction": {
+        "correlation": 0.540258385160808,
+        "mse": 0.0575820691883564,
+        "mae": 0.18073150515556335,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a24_merger_fraction": {
+        "correlation": 0.6990186710953662,
+        "mse": 0.01379574928432703,
+        "mae": 0.07688804715871811,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a24_merger_weighted_fraction": {
+        "correlation": 0.7168007840840976,
+        "mse": 0.012723629362881184,
+        "mae": 0.07544686645269394,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a38_dust_lane_fraction": {
+        "correlation": 0.3303267981373911,
+        "mse": 0.009851779788732529,
+        "mae": 0.028560103848576546,
+        "n_samples": 1000
+      },
+      "t08_odd_feature_a38_dust_lane_weighted_fraction": {
+        "correlation": 0.3295822166542446,
+        "mse": 0.00986356008797884,
+        "mae": 0.028141723945736885,
+        "n_samples": 1000
+      },
+      "t09_bulge_shape_a25_rounded_fraction": {
+        "correlation": 0.46500703226830664,
+        "mse": 0.16043789684772491,
+        "mae": 0.3344114422798157,
+        "n_samples": 1000
+      },
+      "t09_bulge_shape_a25_rounded_weighted_fraction": {
+        "correlation": 0.4852196435925111,
+        "mse": 0.15270236134529114,
+        "mae": 0.31866514682769775,
+        "n_samples": 1000
+      },
+      "t09_bulge_shape_a26_boxy_fraction": {
+        "correlation": 0.20674057569015555,
+        "mse": 0.01917019672691822,
+        "mae": 0.051023807376623154,
+        "n_samples": 1000
+      },
+      "t09_bulge_shape_a26_boxy_weighted_fraction": {
+        "correlation": 0.2660930719343478,
+        "mse": 0.012403542175889015,
+        "mae": 0.03872571513056755,
+        "n_samples": 1000
+      },
+      "t09_bulge_shape_a27_no_bulge_fraction": {
+        "correlation": 0.3461728373790666,
+        "mse": 0.040074340999126434,
+        "mae": 0.08885254710912704,
+        "n_samples": 1000
+      },
+      "t09_bulge_shape_a27_no_bulge_weighted_fraction": {
+        "correlation": 0.35674089009612925,
+        "mse": 0.03759556636214256,
+        "mae": 0.08283571153879166,
+        "n_samples": 1000
+      },
+      "t10_arms_winding_a28_tight_fraction": {
+        "correlation": 0.813057160136931,
+        "mse": 0.04025581106543541,
+        "mae": 0.11661334335803986,
+        "n_samples": 1000
+      },
+      "t10_arms_winding_a28_tight_weighted_fraction": {
+        "correlation": 0.8138287989830759,
+        "mse": 0.040109504014253616,
+        "mae": 0.11512451618909836,
+        "n_samples": 1000
+      },
+      "t10_arms_winding_a29_medium_fraction": {
+        "correlation": 0.6884254720368501,
+        "mse": 0.03151025250554085,
+        "mae": 0.09373445808887482,
+        "n_samples": 1000
+      },
+      "t10_arms_winding_a29_medium_weighted_fraction": {
+        "correlation": 0.6886435499117337,
+        "mse": 0.03150360286235809,
+        "mae": 0.09232764691114426,
+        "n_samples": 1000
+      },
+      "t10_arms_winding_a30_loose_fraction": {
+        "correlation": 0.712772038128925,
+        "mse": 0.013936854898929596,
+        "mae": 0.055931977927684784,
+        "n_samples": 1000
+      },
+      "t10_arms_winding_a30_loose_weighted_fraction": {
+        "correlation": 0.7142153973355605,
+        "mse": 0.013885753229260445,
+        "mae": 0.055163100361824036,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a31_1_fraction": {
+        "correlation": 0.5694255034292083,
+        "mse": 0.010680400766432285,
+        "mae": 0.03817830979824066,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a31_1_weighted_fraction": {
+        "correlation": 0.5691599317969362,
+        "mse": 0.01071259006857872,
+        "mae": 0.03796102851629257,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a32_2_fraction": {
+        "correlation": 0.8255576483738005,
+        "mse": 0.027829470112919807,
+        "mae": 0.08389181643724442,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a32_2_weighted_fraction": {
+        "correlation": 0.8247680468389061,
+        "mse": 0.027965975925326347,
+        "mae": 0.08354612439870834,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a33_3_fraction": {
+        "correlation": 0.7581711386713627,
+        "mse": 0.006159499287605286,
+        "mae": 0.03288058564066887,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a33_3_weighted_fraction": {
+        "correlation": 0.7604405702401754,
+        "mse": 0.0060963197611272335,
+        "mae": 0.0324702151119709,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a34_4_fraction": {
+        "correlation": 0.7327015584041319,
+        "mse": 0.0037987881805747747,
+        "mae": 0.024854876101017,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a34_4_weighted_fraction": {
+        "correlation": 0.7332455008450415,
+        "mse": 0.0037636002525687218,
+        "mae": 0.024579036980867386,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a36_more_than_4_fraction": {
+        "correlation": 0.7467514398867144,
+        "mse": 0.006570117548108101,
+        "mae": 0.030100105330348015,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a36_more_than_4_weighted_fraction": {
+        "correlation": 0.7470513365731368,
+        "mse": 0.006649034563452005,
+        "mae": 0.03037129156291485,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a37_cant_tell_fraction": {
+        "correlation": 0.7103367567142361,
+        "mse": 0.04401339590549469,
+        "mae": 0.12387556582689285,
+        "n_samples": 1000
+      },
+      "t11_arms_number_a37_cant_tell_weighted_fraction": {
+        "correlation": 0.7108738176261823,
+        "mse": 0.04397481679916382,
+        "mae": 0.12275402992963791,
+        "n_samples": 1000
+      }
+    }
+  },
+  "UKIDSS": {
+    "overall": {
+      "mse": 0.04587849602103233,
+      "mae": 0.14109767973423004,
+      "correlation": 0.8392548622892624,
+      "r_squared": 0.7043487238761688,
+      "n_samples": 1000
+    },
+    "per_task": {
+      "t01_smooth_or_features_a01_smooth_fraction": {
+        "correlation": 0.8043364492100038,
+        "mse": 0.03490078076720238,
+        "mae": 0.14539392292499542,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a02_features_or_disk_fraction": {
+        "correlation": 0.828748091520689,
+        "mse": 0.022023208439350128,
+        "mae": 0.10255120694637299,
+        "n_samples": 1000
+      },
+      "t01_smooth_or_features_a03_star_or_artifact_fraction": {
+        "correlation": 0.5115253468793738,
+        "mse": 0.007083418779075146,
+        "mae": 0.06250667572021484,
+        "n_samples": 1000
+      },
+      "t02_edgeon_a04_yes_fraction": {
+        "correlation": 0.7541216210900634,
+        "mse": 0.05632273480296135,
+        "mae": 0.1536550670862198,
+        "n_samples": 1000
+      },
+      "t02_edgeon_a05_no_fraction": {
+        "correlation": 0.6644793310350279,
+        "mse": 0.07795562595129013,
+        "mae": 0.1855766922235489,
+        "n_samples": 1000
+      },
+      "t03_bar_a06_bar_fraction": {
+        "correlation": 0.5206922467954779,
+        "mse": 0.038785144686698914,
+        "mae": 0.11976518481969833,
+        "n_samples": 1000
+      },
+      "t03_bar_a07_no_bar_fraction": {
+        "correlation": 0.407060927990458,
+        "mse": 0.08173169195652008,
+        "mae": 0.1929963231086731,
+        "n_samples": 1000
+      },
+      "t04_spiral_a08_spiral_fraction": {
+        "correlation": 0.6550276058012964,
+        "mse": 0.06004639342427254,
+        "mae": 0.18240374326705933,
+        "n_samples": 1000
+      },
+      "t04_spiral_a09_no_spiral_fraction": {
+        "correlation": 0.4607719665923733,
+        "mse": 0.10222379863262177,
+        "mae": 0.2536826729774475,
+        "n_samples": 1000
+      },
+      "t06_odd_a14_yes_fraction": {
+        "correlation": 0.7730944538718051,
+        "mse": 0.011791189201176167,
+        "mae": 0.07675862312316895,
+        "n_samples": 1000
+      },
+      "t06_odd_a15_no_fraction": {
+        "correlation": 0.772918503641984,
+        "mse": 0.011799473315477371,
+        "mae": 0.07678420841693878,
+        "n_samples": 1000
+      }
+    }
+  }
+}

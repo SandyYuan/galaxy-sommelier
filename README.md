@@ -32,6 +32,29 @@ Our training progression demonstrates significant improvements across all morpho
 
 The model successfully learned to classify most galaxy morphological characteristics, with geometric and structural features showing the strongest performance. Bulge prominence assessment remains the most challenging task, likely requiring additional specialized techniques.
 
+## Out-of-Distribution Evaluation
+
+We tested the model's generalization capabilities by evaluating on **UKIDSS** data (completely unseen survey) compared to the training distribution (**SDSS**). This tests the model's ability to work across different astronomical surveys with varying image properties.
+
+### Cross-Survey Performance Results
+
+| **Metric** | **SDSS (In-Distribution)** | **UKIDSS (Out-of-Distribution)** | **Degradation** |
+|------------|----------------------------|-----------------------------------|-----------------|
+| **Overall Correlation** | 0.893 | 0.839 | **-6.0%** |
+| **R²** | 0.797 | 0.704 | **-11.6%** |
+| **Mean Absolute Error** | 0.085 | 0.141 | +65.6% |
+
+### Key Morphological Features Performance
+
+| **Feature** | **SDSS (r)** | **UKIDSS (r)** | **Degradation** |
+|-------------|--------------|----------------|-----------------|
+| **Disk Detection** | 0.986 | 0.829 | -16.0% |
+| **Edge-on Detection** | 0.856 | 0.754 | -11.9% |
+| **Odd Features** | 0.928 | 0.773 | -16.7% |
+| **Spiral Arms** | 0.963 | 0.655 | -32.0% |
+| **Bar Features** | 0.913 | 0.521 | -43.0% |
+
+
 ### Performance Visualization
 
 **Overall Performance Comparison**
@@ -40,7 +63,10 @@ The model successfully learned to classify most galaxy morphological characteris
 **Distribution Comparison: True vs Predicted**
 ![Distribution Comparison](benchmark_results/comparison_plots/distribution_comparison.png)
 
-The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how the final model captures the underlying data distributions for key morphological features.
+**Out-of-Distribution Performance**
+![OOD Performance](ood_results/ood_performance_comparison.png)
+
+The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how the final model captures the underlying data distributions for key morphological features. The OOD evaluation shows robust cross-survey generalization.
 
 <!-- ## Phase 1: Foundation Setup ✅
 
