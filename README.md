@@ -22,6 +22,14 @@ Our training progression demonstrates significant improvements across all morpho
 | Head Training | 0.759 | 0.576 | 0.153 | Major improvement, learned basic concepts |
 | Full Fine-tuning | **0.850** | **0.722** | **0.106** | Best performance, refined all features |
 
+
+**Overall Performance Comparison**
+![Performance Summary](benchmark_results/comparison_plots/performance_summary.png)
+
+**Distribution Comparison: True vs Predicted**
+![Distribution Comparison](benchmark_results/comparison_plots/distribution_comparison.png)
+
+
 ### Key Morphological Features Performance
 - **Disk Fraction** (smooth vs featured): r = 0.968 (excellent)
 - **Edge-on Detection**: r = 0.935 (excellent) 
@@ -56,12 +64,6 @@ We tested the model's generalization capabilities by evaluating on **UKIDSS** da
 
 
 ### Performance Visualization
-
-**Overall Performance Comparison**
-![Performance Summary](benchmark_results/comparison_plots/performance_summary.png)
-
-**Distribution Comparison: True vs Predicted**
-![Distribution Comparison](benchmark_results/comparison_plots/distribution_comparison.png)
 
 **Out-of-Distribution Performance**
 ![OOD Performance](ood_results/ood_performance_comparison.png)
