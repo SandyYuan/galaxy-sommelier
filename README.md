@@ -68,6 +68,31 @@ We tested the model's generalization capabilities by evaluating on **UKIDSS** da
 
 The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how the final model captures the underlying data distributions for key morphological features. The OOD evaluation shows robust cross-survey generalization.
 
+## SDSS-only vs. Mixed-Survey Model Comparison
+
+To test the hypothesis that training on more diverse data improves generalization, we compared two models:
+1.  **SDSS-only Model**: Fine-tuned on the full SDSS dataset of ~239,000 galaxies, predicting 74 morphological features.
+2.  **Mixed-Survey Model**: Fine-tuned on a balanced, combined dataset of ~186,000 galaxies. This set was constructed by taking all ~93,000 DECaLS galaxies and combining them with a random sample of ~93,000 SDSS galaxies. This model predicts 52 features common to both surveys.
+
+Both models were evaluated on the completely unseen UKIDSS dataset. The comparison was performed on the 9 morphological features available in the UKIDSS ground truth data.
+
+### Results on UKIDSS Data
+
+The model trained on the mixed-survey dataset demonstrated superior performance across all metrics, confirming that exposure to more varied data improves the model's ability to generalize to new, unseen surveys.
+
+| Metric | SDSS-only Model | Mixed (SDSS+DECaLS) Model |
+| :--- | :--- | :--- |
+| **Correlation** | 0.819 | 0.857 |
+| **R-squared** | 0.671 | 0.735 |
+| **MAE** | 0.153 | 0.126 |
+| **MSE** | 0.051 | 0.039 |
+
+### Performance Visualization
+
+![SDSS vs Mixed Model Comparison](benchmark_results/comparison_plots/per_task_correlation_comparison.png)
+
+The bar chart clearly illustrates the performance gain of the mixed-survey model over the SDSS-only model on the out-of-distribution UKIDSS dataset.
+
 <!-- ## Phase 1: Foundation Setup ✅
 
 **Status**: Implementation Complete

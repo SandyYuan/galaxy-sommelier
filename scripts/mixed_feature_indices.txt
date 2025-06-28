@@ -1,0 +1,56 @@
+# Indices of overlapping SDSS features used in mixed model
+# Format: feature_name -> index
+t01_smooth_or_features_a01_smooth_debiased -> 13
+t01_smooth_or_features_a01_smooth_fraction -> 11
+t01_smooth_or_features_a02_features_or_disk_debiased -> 19
+t01_smooth_or_features_a02_features_or_disk_fraction -> 17
+t01_smooth_or_features_a03_star_or_artifact_debiased -> 25
+t01_smooth_or_features_a03_star_or_artifact_fraction -> 23
+t02_edgeon_a04_yes_debiased -> 31
+t02_edgeon_a04_yes_fraction -> 29
+t02_edgeon_a05_no_debiased -> 37
+t02_edgeon_a05_no_fraction -> 35
+t03_bar_a06_bar_debiased -> 43
+t03_bar_a06_bar_fraction -> 41
+t03_bar_a07_no_bar_debiased -> 49
+t03_bar_a07_no_bar_fraction -> 47
+t04_spiral_a08_spiral_debiased -> 55
+t04_spiral_a08_spiral_fraction -> 53
+t04_spiral_a09_no_spiral_debiased -> 61
+t04_spiral_a09_no_spiral_fraction -> 59
+t05_bulge_prominence_a10_no_bulge_debiased -> 67
+t05_bulge_prominence_a10_no_bulge_fraction -> 65
+t05_bulge_prominence_a12_obvious_debiased -> 79
+t05_bulge_prominence_a12_obvious_fraction -> 77
+t05_bulge_prominence_a13_dominant_debiased -> 85
+t05_bulge_prominence_a13_dominant_fraction -> 83
+t07_rounded_a16_completely_round_debiased -> 103
+t07_rounded_a16_completely_round_fraction -> 101
+t07_rounded_a17_in_between_debiased -> 109
+t07_rounded_a17_in_between_fraction -> 107
+t07_rounded_a18_cigar_shaped_debiased -> 115
+t07_rounded_a18_cigar_shaped_fraction -> 113
+t09_bulge_shape_a25_rounded_debiased -> 163
+t09_bulge_shape_a25_rounded_fraction -> 161
+t09_bulge_shape_a26_boxy_debiased -> 169
+t09_bulge_shape_a26_boxy_fraction -> 167
+t09_bulge_shape_a27_no_bulge_debiased -> 175
+t09_bulge_shape_a27_no_bulge_fraction -> 173
+t10_arms_winding_a28_tight_debiased -> 181
+t10_arms_winding_a28_tight_fraction -> 179
+t10_arms_winding_a29_medium_debiased -> 187
+t10_arms_winding_a29_medium_fraction -> 185
+t10_arms_winding_a30_loose_debiased -> 193
+t10_arms_winding_a30_loose_fraction -> 191
+t11_arms_number_a31_1_debiased -> 199
+t11_arms_number_a31_1_fraction -> 197
+t11_arms_number_a32_2_debiased -> 205
+t11_arms_number_a32_2_fraction -> 203
+t11_arms_number_a33_3_debiased -> 211
+t11_arms_number_a33_3_fraction -> 209
+t11_arms_number_a34_4_debiased -> 217
+t11_arms_number_a34_4_fraction -> 215
+t11_arms_number_a36_more_than_4_debiased -> 223
+t11_arms_number_a36_more_than_4_fraction -> 221
+
+# Indices only (for easy copying): [13, 11, 19, 17, 25, 23, 31, 29, 37, 35, 43, 41, 49, 47, 55, 53, 61, 59, 67, 65, 79, 77, 85, 83, 103, 101, 109, 107, 115, 113, 163, 161, 169, 167, 175, 173, 181, 179, 187, 185, 193, 191, 199, 197, 205, 203, 211, 209, 217, 215, 223, 221]

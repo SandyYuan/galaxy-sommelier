@@ -31,7 +31,7 @@ sns.set_palette("husl")
 class GalaxyBenchmark:
     """Simple benchmark suite for Galaxy Sommelier model"""
     
-    def __init__(self, model_path, config_path, output_dir='./benchmark_results'):
+    def __init__(self, model_path, config_path, output_dir='./benchmark_results', max_features=None, feature_indices=None):
         self.model_path = Path(model_path)
         self.config_path = Path(config_path)
         
@@ -71,6 +71,14 @@ class GalaxyBenchmark:
         
         # Results storage
         self.results = {}
+        
+        self.max_features = max_features
+        self.feature_indices = feature_indices
+        
+        if feature_indices is not None:
+            print(f"Using specific feature indices: {len(feature_indices)} features")
+        elif max_features is not None:
+            print(f"Using max features constraint: {max_features} features")
         
     def load_model(self):
         """Load the fine-tuned model"""
@@ -163,24 +171,34 @@ class GalaxyBenchmark:
         """Compute overall regression metrics"""
         print("Computing regression metrics...")
         
-        # Handle shape mismatch (mixed models vs single-survey datasets)
-        if self.predictions.shape[1] != self.true_labels.shape[1]:
+        # Handle shape mismatch OR max_features constraint OR specific feature indices
+        if self.feature_indices is not None:
+            print(f"Using specific feature indices: {len(self.feature_indices)} features")
+            predictions_subset = self.predictions
+            true_labels_subset = self.true_labels[:, self.feature_indices]
+        elif self.max_features is not None:
+            print(f"Max features constraint: Using only first {self.max_features} features")
+            predictions_subset = self.predictions[:, :self.max_features]
+            true_labels_subset = self.true_labels[:, :self.max_features]
+        elif self.predictions.shape[1] != self.true_labels.shape[1]:
             print(f"Shape mismatch detected:")
             print(f"  Predictions: {self.predictions.shape}")
             print(f"  Labels: {self.true_labels.shape}")
             print(f"  Using only the first {self.predictions.shape[1]} features for evaluation")
             
             # Use only the features that the model was trained on
+            predictions_subset = self.predictions
             true_labels_subset = self.true_labels[:, :self.predictions.shape[1]]
         else:
+            predictions_subset = self.predictions
             true_labels_subset = self.true_labels
         
         # Overall metrics
-        mse = np.mean((self.predictions - true_labels_subset) ** 2)
-        mae = np.mean(np.abs(self.predictions - true_labels_subset))
+        mse = np.mean((predictions_subset - true_labels_subset) ** 2)
+        mae = np.mean(np.abs(predictions_subset - true_labels_subset))
         
         # Flatten for correlation
-        pred_flat = self.predictions.flatten()
+        pred_flat = predictions_subset.flatten()
         true_flat = true_labels_subset.flatten()
         
         # Remove any NaN values
@@ -197,7 +215,7 @@ class GalaxyBenchmark:
             'correlation': float(correlation),
             'r_squared': float(r_squared),
             'n_samples': len(pred_clean),
-            'n_features_evaluated': self.predictions.shape[1]
+            'n_features_evaluated': predictions_subset.shape[1]
         }
         
         print(f"Overall Metrics:")
@@ -205,27 +223,29 @@ class GalaxyBenchmark:
         print(f"  MAE: {mae:.6f}")
         print(f"  Correlation: {correlation:.4f}")
         print(f"  R²: {r_squared:.4f}")
-        print(f"  Features evaluated: {self.predictions.shape[1]}")
+        print(f"  Features evaluated: {predictions_subset.shape[1]}")
         
         # Store the subset for other methods to use
+        self.predictions_subset = predictions_subset
         self.true_labels_subset = true_labels_subset
     
     def compute_task_metrics(self):
         """Compute per-task metrics"""
         print("Computing per-task metrics...")
         
-        # Use subset labels if available (for mixed models)
+        # Use subset data if available (for mixed models or max_features constraint)
+        predictions_to_use = getattr(self, 'predictions_subset', self.predictions)
         labels_to_use = getattr(self, 'true_labels_subset', self.true_labels)
         
         # Get task names from data loader
         # For now, use generic task names
-        n_tasks = self.predictions.shape[1]
+        n_tasks = predictions_to_use.shape[1]
         task_names = [f'task_{i:02d}' for i in range(n_tasks)]
         
         task_metrics = {}
         
         for i, task_name in enumerate(task_names):
-            pred_task = self.predictions[:, i]
+            pred_task = predictions_to_use[:, i]
             true_task = labels_to_use[:, i]
             
             # Remove NaN values
@@ -530,22 +550,39 @@ class GalaxyBenchmark:
         print(f"  - Detailed results: benchmark_results.json")
 
 def main():
-    """Main function for command-line usage"""
-    parser = argparse.ArgumentParser(description="Benchmark Galaxy Sommelier model")
+    """Main function"""
+    parser = argparse.ArgumentParser(description="Galaxy Sommelier Model Benchmark")
     parser.add_argument("--model", required=True, help="Path to model checkpoint")
     parser.add_argument("--config", required=True, help="Path to config file")
-    parser.add_argument("--output", default="benchmark_results", help="Output directory")
+    parser.add_argument("--output", default="./benchmark_results", help="Output directory")
+    parser.add_argument("--max-features", type=int, help="Limit evaluation to first N features (for fair comparison)")
+    parser.add_argument("--feature-indices", nargs='+', type=int, help="Specific feature indices to evaluate")
     
     args = parser.parse_args()
     
-    # Run benchmark
+    print("=" * 50)
+    print("Galaxy Sommelier Model Benchmark")
+    print("=" * 50)
+    
+    # Create benchmark instance
     benchmark = GalaxyBenchmark(
         model_path=args.model,
         config_path=args.config,
-        output_dir=args.output
+        output_dir=args.output,
+        max_features=args.max_features,
+        feature_indices=args.feature_indices
     )
     
+    # Run benchmark
     benchmark.run_benchmark()
+    
+    print(f"\nBenchmark completed!")
+    print(f"Results saved to: {benchmark.output_dir}")
+    print(f"\nKey outputs:")
+    print(f"  - Key features scatter plots: key_features_scatter_plots.png")
+    print(f"  - Key features distributions: key_features_distributions.png") 
+    print(f"  - Summary report: summary_report.txt")
+    print(f"  - Detailed results: benchmark_results.json")
 
 if __name__ == "__main__":
     main() 
