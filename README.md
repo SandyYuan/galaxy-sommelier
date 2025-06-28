@@ -1,16 +1,16 @@
-# Galaxy Sommelier: Vision Transformer for Galaxy Morphology Classification
+# Galaxy Sommelier: A Study on Out-of-Distribution Generalization by Mixing Astronomical Survey Data
 
-A state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning for robust generalization across astronomical surveys.
+An investigation into how training on mixed-survey astronomical data affects the out-of-distribution (OOD) generalization of Vision Transformer models for galaxy morphology classification.
 
 ## Project Overview
 
-Galaxy Sommelier leverages the power of Vision Transformers (DINOv2) to classify galaxy morphologies using Galaxy Zoo citizen science data. The model is designed to generalize well across different astronomical surveys including SDSS, DESI Legacy Imaging, and HST.
+This project explores the effectiveness of improving model generalization by training on a diverse dataset from multiple astronomical surveys. We use a Vision Transformer (DINOv2) to classify galaxy morphologies and specifically investigate how a model trained on a mix of SDSS and DECaLS survey data performs when evaluated on a completely unseen survey, UKIDSS. This serves as a key test for out-of-distribution robustness, a critical requirement for building universal astronomical models.
 
 ## Results
 
-Our training progression demonstrates significant improvements across all morphological classification tasks:
+Our initial training on a single survey (SDSS) demonstrates strong performance, with significant improvements across all morphological classification tasks:
 
-### Performance Summary
+### Performance Summary (SDSS-only model)
 - **Overall Correlation**: 0.85 (R² = 0.72)
 - **Mean Absolute Error**: 0.106 
 - **Main Morphology Classification Accuracy**: 62.5%
@@ -68,7 +68,7 @@ We tested the model's generalization capabilities by evaluating on **UKIDSS** da
 **Out-of-Distribution Performance**
 ![OOD Performance](ood_results/ood_performance_comparison.png)
 
-The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning. The distribution comparison shows how the final model captures the underlying data distributions for key morphological features. The OOD evaluation shows robust cross-survey generalization.
+The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning for the SDSS-only model.
 
 ## SDSS-only vs. Mixed-Survey Model Comparison
 
@@ -94,6 +94,14 @@ The model trained on the mixed-survey dataset demonstrated superior performance 
 ![SDSS vs Mixed Model Comparison](benchmark_results/comparison_plots/per_task_correlation_comparison.png)
 
 The bar chart clearly illustrates the performance gain of the mixed-survey model over the SDSS-only model on the out-of-distribution UKIDSS dataset.
+
+### Per-Task Correlation
+
+To see exactly where the mixed-survey model improves, we can compare the per-task correlation on the 9 features available in the UKIDSS dataset.
+
+![Per-Task Correlation Comparison](benchmark_results/comparison_plots/per_task_correlation_comparison.png)
+
+The mixed-survey model shows improved correlation across all available features, with the most significant gains in identifying bar and spiral features. This confirms that training on more diverse data leads to a more robust and generalizable model.
 
 <!-- ## Phase 1: Foundation Setup ✅
 

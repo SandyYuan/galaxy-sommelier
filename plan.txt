@@ -9,6 +9,16 @@ Build a state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning t
 **Target**: Universal cross-survey morphology classifier  
 **Data Storage**: `/pscratch/sd/s/sihany/galaxy-sommelier-data/`
 
+---
+## LATEST UPDATE: Phase 2 Complete ✅ (OOD Generalization Study)
+- **Objective**: Tested if training on diverse data (SDSS+DECaLS) improves generalization on an unseen survey (UKIDSS).
+- **Outcome**: **Success**. The mixed-survey model significantly outperformed the SDSS-only model (0.857 vs 0.819 correlation), confirming the hypothesis.
+- **Key Actions**:
+    - Created a unified evaluation script: `scripts/compare_models.py`.
+    - Consolidated evaluation logic, replacing older scripts.
+    - Updated `README.md` with final results and analysis.
+---
+
 ## Project Status: Phase 1 Complete ✅
 
 ### Achievements Summary
@@ -305,7 +315,50 @@ class GalaxyTrainer:
 
 ---
 
-## Phase 2: Multi-Survey Domain Adaptation (Week 3-6) 🚧 IN PROGRESS
+## Phase 2: Out-of-Distribution Generalization Study (Week 3-4) ✅ COMPLETED
+
+### Key Objectives
+1.  **Hypothesis**: Test if training on a more diverse dataset (mixing SDSS and DECaLS surveys) improves model generalization to a completely unseen survey (UKIDSS).
+2.  **Compare Models**: Benchmark the performance of the original SDSS-only model against a new model trained on a mixed-survey dataset.
+3.  **Standardize Evaluation**: Develop a robust evaluation script that can handle models with different feature sets and perform fair comparisons on common ground.
+4.  **Analyze & Document**: Quantify the performance difference and document the findings in the project `README.md`.
+
+### Implementation Steps
+
+#### Step 2.1: Identify Models and Feature Mismatch
+-   **Models Identified**:
+    -   `SDSS-only`: `/pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt` (74 features)
+    -   `Mixed-Survey`: `/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed/best_model.pt` (52 features)
+-   **Problem**: The two models predict a different number of morphological features. A direct comparison is not possible.
+-   **Solution**: The comparison must be done on the subset of features that are common to both models AND have ground-truth labels in the UKIDSS test dataset.
+
+#### Step 2.2: Develop a Unified Comparison Script
+-   **File Created**: `scripts/compare_models.py`
+-   **Functionality**:
+    -   **Dual Mode**: Can run in a 2-model "comparison" mode or a 1-model "benchmark" mode.
+    -   **Argument Parsing**: Uses `argparse` to accept model paths, configs, and feature counts from the command line.
+    -   **Automated Feature Matching**: Intelligently finds the intersection of features between the model predictions and the ground-truth labels for a fair comparison.
+    -   **Metric Calculation**: Computes overall metrics (Correlation, R², MAE, MSE) and detailed per-task correlations.
+-   **Outcome**: This script replaces the older `simple_benchmark.py` and `ood_evaluation.py` scripts by combining their functionality into a more powerful and flexible tool.
+
+#### Step 2.3: Execute Comparison and Analyze Results
+-   **Execution**: The `compare_models.py` script was run on the full UKIDSS dataset.
+-   **Findings**:
+    -   The Mixed-Survey model demonstrated superior performance across all metrics.
+    -   Overall correlation improved from **0.819** (SDSS-only) to **0.857** (Mixed-Survey).
+    -   The largest gains were seen in the classification of bar and spiral features.
+-   **Conclusion**: The initial hypothesis was confirmed. Training on more diverse data significantly improves OOD generalization.
+
+#### Step 2.4: Cleanup and Documentation
+-   **Code Cleanup**: Removed 5 redundant and outdated scripts from the `scripts` directory.
+-   **Documentation**:
+    -   Updated the `README.md` title and overview to reflect the project's focus on OOD generalization.
+    -   Added a new section to the `README.md` detailing the model comparison, the final results table, and a new plot visualizing the per-task performance gains.
+    -   This `plan.txt` file was updated to reflect the completion of Phase 2.
+
+---
+
+## Phase 3: Multi-Survey Domain Adaptation (Week 3-6) 🚧 IN PROGRESS
 
 ### Key Objectives
 1. **Collect multi-survey Galaxy Zoo datasets** (SDSS, DES, DECaLS, HST, UKIDSS)
