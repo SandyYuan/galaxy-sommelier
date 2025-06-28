@@ -91,12 +91,6 @@ The model trained on the mixed-survey dataset demonstrated superior performance 
 
 ### Performance Visualization
 
-![SDSS vs Mixed Model Comparison](benchmark_results/comparison_plots/per_task_correlation_comparison.png)
-
-The bar chart clearly illustrates the performance gain of the mixed-survey model over the SDSS-only model on the out-of-distribution UKIDSS dataset.
-
-### Per-Task Correlation
-
 To see exactly where the mixed-survey model improves, we can compare the per-task correlation on the 9 features available in the UKIDSS dataset.
 
 ![Per-Task Correlation Comparison](benchmark_results/comparison_plots/per_task_correlation_comparison.png)
