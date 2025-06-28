@@ -163,13 +163,25 @@ class GalaxyBenchmark:
         """Compute overall regression metrics"""
         print("Computing regression metrics...")
         
+        # Handle shape mismatch (mixed models vs single-survey datasets)
+        if self.predictions.shape[1] != self.true_labels.shape[1]:
+            print(f"Shape mismatch detected:")
+            print(f"  Predictions: {self.predictions.shape}")
+            print(f"  Labels: {self.true_labels.shape}")
+            print(f"  Using only the first {self.predictions.shape[1]} features for evaluation")
+            
+            # Use only the features that the model was trained on
+            true_labels_subset = self.true_labels[:, :self.predictions.shape[1]]
+        else:
+            true_labels_subset = self.true_labels
+        
         # Overall metrics
-        mse = np.mean((self.predictions - self.true_labels) ** 2)
-        mae = np.mean(np.abs(self.predictions - self.true_labels))
+        mse = np.mean((self.predictions - true_labels_subset) ** 2)
+        mae = np.mean(np.abs(self.predictions - true_labels_subset))
         
         # Flatten for correlation
         pred_flat = self.predictions.flatten()
-        true_flat = self.true_labels.flatten()
+        true_flat = true_labels_subset.flatten()
         
         # Remove any NaN values
         mask = ~(np.isnan(pred_flat) | np.isnan(true_flat))
@@ -184,7 +196,8 @@ class GalaxyBenchmark:
             'mae': float(mae),
             'correlation': float(correlation),
             'r_squared': float(r_squared),
-            'n_samples': len(pred_clean)
+            'n_samples': len(pred_clean),
+            'n_features_evaluated': self.predictions.shape[1]
         }
         
         print(f"Overall Metrics:")
@@ -192,10 +205,17 @@ class GalaxyBenchmark:
         print(f"  MAE: {mae:.6f}")
         print(f"  Correlation: {correlation:.4f}")
         print(f"  R²: {r_squared:.4f}")
+        print(f"  Features evaluated: {self.predictions.shape[1]}")
+        
+        # Store the subset for other methods to use
+        self.true_labels_subset = true_labels_subset
     
     def compute_task_metrics(self):
         """Compute per-task metrics"""
         print("Computing per-task metrics...")
+        
+        # Use subset labels if available (for mixed models)
+        labels_to_use = getattr(self, 'true_labels_subset', self.true_labels)
         
         # Get task names from data loader
         # For now, use generic task names
@@ -206,7 +226,7 @@ class GalaxyBenchmark:
         
         for i, task_name in enumerate(task_names):
             pred_task = self.predictions[:, i]
-            true_task = self.true_labels[:, i]
+            true_task = labels_to_use[:, i]
             
             # Remove NaN values
             mask = ~(np.isnan(pred_task) | np.isnan(true_task))
@@ -244,6 +264,9 @@ class GalaxyBenchmark:
         """Create predicted vs true scatter plots for our 6 key features"""
         print("Creating scatter plots for 6 key morphological features...")
         
+        # Use subset labels if available (for mixed models)
+        labels_to_use = getattr(self, 'true_labels_subset', self.true_labels)
+        
         # Create subplots (2x3 grid for 6 features)
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
         axes = axes.flatten()
@@ -252,7 +275,7 @@ class GalaxyBenchmark:
             ax = axes[idx]
             
             pred_task = self.predictions[:, feature_idx]
-            true_task = self.true_labels[:, feature_idx]
+            true_task = labels_to_use[:, feature_idx]
             
             # Remove NaN values
             mask = ~(np.isnan(pred_task) | np.isnan(true_task))
@@ -451,7 +474,8 @@ class GalaxyBenchmark:
             f.write(f"  MAE: {overall['mae']:.6f}\n")
             f.write(f"  Correlation: {overall['correlation']:.4f}\n")
             f.write(f"  R²: {overall['r_squared']:.4f}\n")
-            f.write(f"  Samples: {overall['n_samples']}\n\n")
+            f.write(f"  Samples: {overall['n_samples']}\n")
+            f.write(f"  Features evaluated: {overall['n_features_evaluated']}\n\n")
             
             # Top performing tasks
             task_metrics = self.results['task_metrics']

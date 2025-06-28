@@ -129,21 +129,49 @@ class GalaxyTrainer:
         """Setup train and validation data loaders"""
         logger.info("Setting up data loaders...")
         
-        self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
-            self.config_path, 
-            sample_size=self.sample_size
-        )
+        # Check if using mixed dataset
+        mixed_config = self.config.get('mixed_data', {})
+        use_mixed = mixed_config.get('use_mixed_dataset', False)
+        
+        if use_mixed:
+            logger.info("Using mixed SDSS+DECaLS dataset")
+            from mixed_dataset import create_mixed_data_loaders
+            
+            sdss_fraction = mixed_config.get('sdss_fraction', 0.5)
+            logger.info(f"SDSS fraction: {sdss_fraction:.1%}")
+            
+            self.train_loader, self.val_loader, self.test_loader = create_mixed_data_loaders(
+                self.config_path, 
+                sdss_fraction=sdss_fraction,
+                sample_size=self.sample_size
+            )
+        else:
+            logger.info("Using standard SDSS dataset")
+            self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
+                self.config_path, 
+                sample_size=self.sample_size
+            )
         
         logger.info(f"Train batches: {len(self.train_loader)}")
         logger.info(f"Validation batches: {len(self.val_loader)}")
         
         # Log data info
-        if self.use_wandb:
-            self.wandb.log({
-                'train_batches': len(self.train_loader),
-                'val_batches': len(self.val_loader),
-                'sample_size': self.sample_size or 'full'
+        wandb_data = {
+            'train_batches': len(self.train_loader),
+            'val_batches': len(self.val_loader),
+            'sample_size': self.sample_size or 'full'
+        }
+        
+        if use_mixed:
+            wandb_data.update({
+                'dataset_type': 'mixed_sdss_decals',
+                'sdss_fraction': mixed_config.get('sdss_fraction', 0.5)
             })
+        else:
+            wandb_data['dataset_type'] = 'sdss_only'
+            
+        if self.use_wandb:
+            self.wandb.log(wandb_data)
     
     def setup_optimizer(self):
         """Setup optimizer and learning rate scheduler with differential learning rates"""
