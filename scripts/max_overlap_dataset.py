@@ -133,6 +133,10 @@ class MaxOverlapDataset(Dataset):
             # We need to rename the columns in the catalog to match DECaLS names
             rename_map = {sdss_col: decals_col for sdss_col, decals_col in SDSS_TO_DECALS.items() if sdss_col in self.catalog.columns}
             self.catalog.rename(columns=rename_map, inplace=True)
+        
+        # Handle NaN values in output features (same as working MixedSDSSDECaLSDataset)
+        for feature in self.output_features:
+            self.catalog[feature] = self.catalog[feature].fillna(0.0)
             
         logger.info(f"Found {len(self.output_features)} overlapping morphological features.")
 
@@ -154,10 +158,14 @@ class MaxOverlapDataset(Dataset):
         if self.transform:
             image = self.transform(image)
             
-        # Get labels
+        # Get labels (NaNs already handled during dataset preparation)
         labels = torch.tensor(row[self.output_features].values.astype(float), dtype=torch.float32)
         
         # Get sample weight (if available)
         weight = torch.tensor(row.get('weight', 1.0), dtype=torch.float32)
         
-        return image, labels, weight 
+        return {
+            'image': image,
+            'labels': labels,
+            'weight': weight
+        } 
