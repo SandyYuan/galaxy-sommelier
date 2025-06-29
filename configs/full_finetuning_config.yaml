@@ -82,7 +82,7 @@ num_workers: 4
 pin_memory: true
 
 # Paths for outputs
-checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models"
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only"
 results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results"
 
 # Initialization - start from head-trained model

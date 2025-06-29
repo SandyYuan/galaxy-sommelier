@@ -155,6 +155,43 @@ def load_shared_features(filepath):
             features.append(feature_name)
     return features
 
+def get_model_info_from_config(config_path):
+    """Extract model path, features, and other info from config file."""
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Get checkpoint directory and look for best_model.pt
+    checkpoint_dir = Path(config.get('checkpoint_dir', './models'))
+    model_path = checkpoint_dir / 'best_model.pt'
+    
+    if not model_path.exists():
+        raise FileNotFoundError(f"Best model not found: {model_path}")
+    
+    # Get number of features from model config
+    num_features = config['model']['num_outputs']
+    
+    # Determine model type for logging
+    mixed_config = config.get('mixed_data', {})
+    if mixed_config.get('use_mixed_dataset', False):
+        dataset_name = mixed_config.get('dataset_name', 'MixedSDSSDECaLSDataset')
+        if dataset_name == "MaxOverlapDataset":
+            model_type = "MaxOverlapDataset"
+        else:
+            model_type = "Mixed SDSS+DECaLS"
+    else:
+        model_type = "SDSS-only"
+    
+    print(f"Detected {model_type} model: {model_path}")
+    print(f"  Features: {num_features}")
+    
+    return {
+        'model_path': str(model_path),
+        'config_path': config_path,
+        'num_features': num_features,
+        'model_type': model_type,
+        'config': config
+    }
+
 def get_model_features_from_config(config_path, model_path):
     """Determine model features based on config and validate against model size."""
     with open(config_path, 'r') as f:
@@ -165,22 +202,23 @@ def get_model_features_from_config(config_path, model_path):
     if mixed_config.get('use_mixed_dataset', False):
         dataset_name = mixed_config.get('dataset_name', 'MixedSDSSDECaLSDataset')
         if dataset_name == "MaxOverlapDataset":
-            print(f"Detected MaxOverlapDataset model: {model_path}")
             return load_shared_features(SHARED_FEATURES_FILE)  # Max overlap uses same feature set as mixed
         else:
-            print(f"Detected Mixed SDSS+DECaLS model: {model_path}")
             return load_shared_features(SHARED_FEATURES_FILE)
     else:
-        print(f"Detected SDSS-only model: {model_path}")
         return get_sdss_feature_columns(SDSS_CATALOG_PATH)
 
 def run_comparison(args):
     """Runs the two-model comparison."""
     print("Running in comparison mode...")
     
+    # Get model info from configs
+    model1_info = get_model_info_from_config(args.config1)
+    model2_info = get_model_info_from_config(args.config2)
+    
     # Load models
-    model1, device = load_model(args.model1_path, args.model1_config, args.model1_features)
-    model2, _ = load_model(args.model2_path, args.model2_config, args.model2_features)
+    model1, device = load_model(model1_info['model_path'], model1_info['config_path'], model1_info['num_features'])
+    model2, _ = load_model(model2_info['model_path'], model2_info['config_path'], model2_info['num_features'])
 
     # Load data
     ukidss_dataset = load_ukidss_data()
@@ -189,26 +227,26 @@ def run_comparison(args):
     model1_preds, true_labels = get_predictions(model1, device, ukidss_dataset)
     model2_preds, _ = get_predictions(model2, device, ukidss_dataset)
     
-    print(f"Model 1 predictions shape: {model1_preds.shape}")
-    print(f"Model 2 predictions shape: {model2_preds.shape}")
+    print(f"\nModel 1 ({model1_info['model_type']}) predictions shape: {model1_preds.shape}")
+    print(f"Model 2 ({model2_info['model_type']}) predictions shape: {model2_preds.shape}")
     print(f"True labels shape: {true_labels.shape}")
     
     # Get feature columns for each model based on their configs
     ukidss_label_columns = ukidss_dataset.label_columns
     
-    model1_features = get_model_features_from_config(args.model1_config, args.model1_path)
-    model2_features = get_model_features_from_config(args.model2_config, args.model2_path)
+    model1_features = get_model_features_from_config(model1_info['config_path'], model1_info['model_path'])
+    model2_features = get_model_features_from_config(model2_info['config_path'], model2_info['model_path'])
     
     # Validate feature counts match model outputs
-    if len(model1_features) != args.model1_features:
-        print(f"WARNING: Model1 config suggests {len(model1_features)} features, but --model1_features={args.model1_features}")
+    if len(model1_features) != model1_info['num_features']:
+        print(f"WARNING: Model1 config suggests {len(model1_features)} features, but model has {model1_info['num_features']}")
         # Truncate to actual model size
-        model1_features = model1_features[:args.model1_features]
+        model1_features = model1_features[:model1_info['num_features']]
     
-    if len(model2_features) != args.model2_features:
-        print(f"WARNING: Model2 config suggests {len(model2_features)} features, but --model2_features={args.model2_features}")
+    if len(model2_features) != model2_info['num_features']:
+        print(f"WARNING: Model2 config suggests {len(model2_features)} features, but model has {model2_info['num_features']}")
         # Truncate to actual model size  
-        model2_features = model2_features[:args.model2_features]
+        model2_features = model2_features[:model2_info['num_features']]
     
     # Find common features between both models and UKIDSS
     comparison_features = []
@@ -240,8 +278,11 @@ def run_single_benchmark(args):
     """Runs a benchmark on a single model."""
     print("Running in single benchmark mode...")
     
+    # Get model info from config
+    model_info = get_model_info_from_config(args.config1)
+    
     # Load model
-    model, device = load_model(args.model1_path, args.model1_config, args.model1_features)
+    model, device = load_model(model_info['model_path'], model_info['config_path'], model_info['num_features'])
 
     # Load data
     ukidss_dataset = load_ukidss_data()
@@ -253,12 +294,12 @@ def run_single_benchmark(args):
     print(f"True labels shape: {true_labels.shape}")
 
     # For a single model, we compare all its outputs against available labels
-    model_output_features = get_sdss_feature_columns(SDSS_CATALOG_PATH)[:predictions.shape[1]]
+    model_features = get_model_features_from_config(model_info['config_path'], model_info['model_path'])
     ukidss_label_columns = ukidss_dataset.label_columns
     
-    comparison_features = [f for f in model_output_features if f in ukidss_label_columns]
+    comparison_features = [f for f in model_features if f in ukidss_label_columns]
     
-    pred_indices = [model_output_features.index(f) for f in comparison_features]
+    pred_indices = [model_features.index(f) for f in comparison_features]
     label_indices = [ukidss_label_columns.index(f) for f in comparison_features]
     
     preds_final = predictions[:, pred_indices]
@@ -268,7 +309,7 @@ def run_single_benchmark(args):
 
     metrics = compute_metrics(preds_final, labels_final, comparison_features)
     
-    print("\n--- Benchmark Results on UKIDSS Data ---")
+    print(f"\n--- Benchmark Results for {model_info['model_type']} Model ---")
     results_df = pd.DataFrame({
         'Metric': ['Correlation', 'R-squared', 'MAE', 'MSE'],
         'Score': [
@@ -286,7 +327,7 @@ def run_single_benchmark(args):
     print(task_corr_df.to_string(index=False))
 
     # Save results to output directory
-    if args.output_dir:
+    if hasattr(args, 'output_dir') and args.output_dir:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -361,25 +402,19 @@ def print_metrics_table(model1_preds, model2_preds, true_labels, shared_features
     print("\nComparison finished.")
 
 def main():
-    parser = argparse.ArgumentParser(description="Benchmark or compare galaxy morphology models.")
+    parser = argparse.ArgumentParser(description="Benchmark or compare galaxy morphology models using config files.")
     
-    # Model 1 (required)
-    parser.add_argument('--model1_path', required=True, type=str, help="Path to the first model checkpoint.")
-    parser.add_argument('--model1_config', required=True, type=str, help="Path to the first model's config file.")
-    parser.add_argument('--model1_features', required=True, type=int, help="Number of output features for the first model.")
-
-    # Model 2 (optional, for comparison)
-    parser.add_argument('--model2_path', type=str, help="Path to the second model checkpoint.")
-    parser.add_argument('--model2_config', type=str, help="Path to the second model's config file.")
-    parser.add_argument('--model2_features', type=int, help="Number of output features for the second model.")
+    # Config-based approach
+    parser.add_argument('--config1', required=True, type=str, help="Path to the first model's config file.")
+    parser.add_argument('--config2', type=str, help="Path to the second model's config file (for comparison mode).")
     
-    # Output directory (optional)
+    # Optional output directory
     parser.add_argument('--output_dir', type=str, help="Directory to save benchmark results and predictions.")
 
     args = parser.parse_args()
 
     # Decide which mode to run
-    if args.model2_path and args.model2_config and args.model2_features:
+    if args.config2:
         run_comparison(args)
     else:
         run_single_benchmark(args)
