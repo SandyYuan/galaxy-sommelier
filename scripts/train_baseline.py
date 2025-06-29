@@ -475,10 +475,10 @@ class GalaxyTrainer:
         all_labels = np.concatenate(all_labels, axis=0)
         
         # Mean Absolute Error
-        mae = np.mean(np.abs(all_outputs - all_labels))
+        mae = float(np.mean(np.abs(all_outputs - all_labels)))
         
         # Correlation coefficient
-        correlation = np.corrcoef(all_outputs.flatten(), all_labels.flatten())[0, 1]
+        correlation = float(np.corrcoef(all_outputs.flatten(), all_labels.flatten())[0, 1])
         
         return {
             'val_loss': avg_loss,
