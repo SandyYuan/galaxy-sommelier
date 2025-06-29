@@ -20,6 +20,7 @@ from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
 import json
+from torchvision import transforms
 
 # Add scripts directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -30,6 +31,33 @@ from data_processing import create_data_loaders
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def get_transforms(config, mode='train'):
+    """Gets the transformations for the dataset based on config."""
+    image_size = config['preprocessing']['image_size']
+    normalize_mean = config['preprocessing']['normalize_mean']
+    normalize_std = config['preprocessing']['normalize_std']
+    
+    if mode == 'train':
+        aug_config = config.get('augmentation', {})
+        return transforms.Compose([
+            transforms.Resize((image_size, image_size)),
+            transforms.RandomHorizontalFlip(p=0.5 if aug_config.get('horizontal_flip', False) else 0),
+            transforms.RandomVerticalFlip(p=0.5 if aug_config.get('vertical_flip', False) else 0),
+            transforms.RandomRotation(degrees=aug_config.get('rotation_degrees', 0)),
+            transforms.ColorJitter(
+                brightness=aug_config.get('brightness_factor', 0),
+                contrast=aug_config.get('contrast_factor', 0)
+            ),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=normalize_mean, std=normalize_std)
+        ])
+    else: # 'val' or 'test'
+        return transforms.Compose([
+            transforms.Resize((image_size, image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=normalize_mean, std=normalize_std)
+        ])
 
 class GalaxyTrainer:
     """Main training class for Galaxy Sommelier"""
@@ -63,6 +91,10 @@ class GalaxyTrainer:
                 logger.warning("wandb not available, skipping logging")
                 self.use_wandb = False
         
+        # Define transforms
+        self.train_transform = get_transforms(self.config, mode='train')
+        self.val_transform = get_transforms(self.config, mode='val')
+
         # Setup model
         self.setup_model()
         
@@ -134,24 +166,78 @@ class GalaxyTrainer:
         use_mixed = mixed_config.get('use_mixed_dataset', False)
         
         if use_mixed:
-            logger.info("Using mixed SDSS+DECaLS dataset")
-            from mixed_dataset import create_mixed_data_loaders
-            
-            sdss_fraction = mixed_config.get('sdss_fraction', 0.5)
-            logger.info(f"SDSS fraction: {sdss_fraction:.1%}")
-            
-            self.train_loader, self.val_loader, self.test_loader = create_mixed_data_loaders(
-                self.config_path, 
-                sdss_fraction=sdss_fraction,
-                sample_size=self.sample_size
-            )
+            dataset_name = mixed_config.get('dataset_name', 'MixedSDSSDECaLSDataset') # Default to original
+            logger.info(f"Using mixed dataset loader: {dataset_name}")
+
+            if dataset_name == "MaxOverlapDataset":
+                from max_overlap_dataset import MaxOverlapDataset # Import our new class
+                
+                # These paths now come directly from the config
+                sdss_cat_path = self.config['data']['sdss_catalog_path']
+                decals_cat_path = self.config['data']['decals_catalog_path']
+                
+                # Create datasets
+                train_dataset = MaxOverlapDataset(
+                    sdss_catalog_path=sdss_cat_path,
+                    decals_catalog_path=decals_cat_path,
+                    sdss_image_dir=self.config['data']['sdss_dir'],
+                    decals_image_dir=self.config['data']['decals_dir'],
+                    transform=self.train_transform,
+                    feature_set=mixed_config.get('feature_set', 'sdss')
+                )
+                
+                # For this dataset, we can use a simple random split for validation
+                # as the catalogs are already finalized
+                val_split = 0.1
+                num_train = int((1.0 - val_split) * len(train_dataset))
+                num_val = len(train_dataset) - num_train
+                self.train_dataset, self.val_dataset = torch.utils.data.random_split(
+                    train_dataset, [num_train, num_val],
+                    generator=torch.Generator().manual_seed(42)
+                )
+
+                # Use the same transformations for the validation split
+                self.val_dataset.dataset.transform = self.val_transform
+                
+            else: # Original mixed dataset logic
+                from mixed_dataset import create_mixed_data_loaders
+                
+                sdss_fraction = mixed_config.get('sdss_fraction', 0.5)
+                logger.info(f"SDSS fraction: {sdss_fraction:.1%}")
+                
+                self.train_loader, self.val_loader, self.test_loader = create_mixed_data_loaders(
+                    self.config_path, 
+                    sdss_fraction=sdss_fraction,
+                    sample_size=self.sample_size
+                )
+                # The rest is handled inside create_mixed_data_loaders, so we can return
+                return
+
         else:
             logger.info("Using standard SDSS dataset")
             self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
                 self.config_path, 
                 sample_size=self.sample_size
             )
-        
+            return
+
+        # Create DataLoaders from the datasets created above (for MaxOverlap path)
+        self.train_loader = torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.config['training']['batch_size'],
+            shuffle=True,
+            num_workers=self.config.get('num_workers', 4),
+            pin_memory=self.config.get('pin_memory', True)
+        )
+        self.val_loader = torch.utils.data.DataLoader(
+            self.val_dataset,
+            batch_size=self.config['training']['batch_size'],
+            shuffle=False,
+            num_workers=self.config.get('num_workers', 4),
+            pin_memory=self.config.get('pin_memory', True)
+        )
+        self.test_loader = None # No separate test set in this flow
+
         logger.info(f"Train batches: {len(self.train_loader)}")
         logger.info(f"Validation batches: {len(self.val_loader)}")
         
@@ -286,36 +372,34 @@ class GalaxyTrainer:
             self.training_history = []
     
     def train_epoch(self):
-        """Train for one epoch"""
+        """Run one training epoch"""
         self.model.train()
-        
         total_loss = 0
-        total_mse_loss = 0
-        num_batches = 0
         
-        progress_bar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch}")
+        loop = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch} [Train]")
         
-        for batch_idx, batch in enumerate(progress_bar):
-            # Move to device
-            images = batch['image'].to(self.device, non_blocking=True)
-            labels = batch['labels'].to(self.device, non_blocking=True)
-            weights = batch['weight'].to(self.device, non_blocking=True)
-            
-            # Zero gradients
+        for i, batch_data in enumerate(loop):
             self.optimizer.zero_grad()
             
-            # Forward pass with mixed precision
+            # Handle both dict and tuple/list batch formats for backward compatibility
+            if isinstance(batch_data, dict):
+                images = batch_data['image'].to(self.device, non_blocking=True)
+                labels = batch_data['labels'].to(self.device, non_blocking=True)
+                weights = batch_data['weight'].to(self.device, non_blocking=True)
+            else:
+                images, labels, weights = batch_data
+                images = images.to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
+                weights = weights.to(self.device, non_blocking=True)
+            
             with autocast():
-                predictions = self.model(images)
-                
-                # Compute loss
-                loss_dict = self.criterion(predictions, labels, weights)
+                outputs = self.model(images)
+                loss_dict = self.criterion(outputs, labels, weights)
                 loss = loss_dict['total_loss']
             
-            # Backward pass
             self.scaler.scale(loss).backward()
             
-            # Gradient clipping
+            # Unscale and clip gradients
             self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), 
@@ -331,86 +415,70 @@ class GalaxyTrainer:
             
             # Accumulate losses
             total_loss += loss.item()
-            total_mse_loss += loss_dict['mse_loss'].item()
-            num_batches += 1
             
             # Update progress bar
-            progress_bar.set_postfix({
-                'loss': f"{loss.item():.4f}",
-                'mse': f"{loss_dict['mse_loss'].item():.4f}",
-                'lr': f"{self.scheduler.get_last_lr()[0]:.2e}"
-            })
+            loop.set_postfix({'loss': f"{loss.item():.4f}", 'lr': f"{self.scheduler.get_last_lr()[0]:.2e}"})
             
             # Log to wandb
-            if self.use_wandb and batch_idx % self.config['wandb']['log_freq'] == 0:
-                self.wandb.log({
+            if self.use_wandb and i % self.config['wandb']['log_freq'] == 0:
+                log_metrics = {
                     'train_loss_step': loss.item(),
-                    'train_mse_step': loss_dict['mse_loss'].item(),
                     'learning_rate': self.scheduler.get_last_lr()[0],
                     'epoch': self.current_epoch,
-                    'step': batch_idx + self.current_epoch * len(self.train_loader)
-                })
+                    'step': i + self.current_epoch * len(self.train_loader)
+                }
+                log_metrics.update({f'train_{k}_step': v.item() for k, v in loss_dict.items() if k != 'total_loss'})
+                self.wandb.log(log_metrics)
         
-        # Calculate average losses
-        avg_loss = total_loss / num_batches
-        avg_mse_loss = total_mse_loss / num_batches
-        
-        return {
-            'train_loss': avg_loss,
-            'train_mse_loss': avg_mse_loss
-        }
+        return {'train_loss': total_loss / len(self.train_loader)}
     
     def validate(self):
-        """Validate the model"""
+        """Run one validation epoch"""
         self.model.eval()
-        
         total_loss = 0
-        total_mse_loss = 0
-        num_batches = 0
-        
-        all_predictions = []
+        all_outputs = []
         all_labels = []
         
+        loop = tqdm(self.val_loader, desc=f"Epoch {self.current_epoch} [Val]")
+        
         with torch.no_grad():
-            for batch in tqdm(self.val_loader, desc="Validation"):
-                # Move to device
-                images = batch['image'].to(self.device, non_blocking=True)
-                labels = batch['labels'].to(self.device, non_blocking=True)
-                weights = batch['weight'].to(self.device, non_blocking=True)
-                
-                # Forward pass
+            for batch_data in loop:
+                # Handle both dict and tuple/list batch formats for backward compatibility
+                if isinstance(batch_data, dict):
+                    images = batch_data['image'].to(self.device, non_blocking=True)
+                    labels = batch_data['labels'].to(self.device, non_blocking=True)
+                    weights = batch_data['weight'].to(self.device, non_blocking=True)
+                else:
+                    images, labels, weights = batch_data
+                    images = images.to(self.device, non_blocking=True)
+                    labels = labels.to(self.device, non_blocking=True)
+                    weights = weights.to(self.device, non_blocking=True)
+
                 with autocast():
-                    predictions = self.model(images)
-                    loss_dict = self.criterion(predictions, labels, weights)
+                    outputs = self.model(images)
+                    loss_dict = self.criterion(outputs, labels, weights)
+                    loss = loss_dict['total_loss']
                 
-                # Accumulate losses
-                total_loss += loss_dict['total_loss'].item()
-                total_mse_loss += loss_dict['mse_loss'].item()
-                num_batches += 1
+                total_loss += loss.item()
                 
-                # Store predictions for metrics
-                all_predictions.append(predictions.cpu())
-                all_labels.append(labels.cpu())
+                all_outputs.append(outputs.cpu().numpy())
+                all_labels.append(labels.cpu().numpy())
         
         # Calculate average losses
-        avg_loss = total_loss / num_batches
-        avg_mse_loss = total_mse_loss / num_batches
+        avg_loss = total_loss / len(self.val_loader)
         
         # Calculate additional metrics
-        all_predictions = torch.cat(all_predictions, dim=0)
-        all_labels = torch.cat(all_labels, dim=0)
+        all_outputs = np.concatenate(all_outputs, axis=0)
+        all_labels = np.concatenate(all_labels, axis=0)
         
         # Mean Absolute Error
-        mae = torch.mean(torch.abs(all_predictions - all_labels)).item()
+        mae = np.mean(np.abs(all_outputs - all_labels))
         
         # Correlation coefficient
-        pred_flat = all_predictions.flatten()
-        label_flat = all_labels.flatten()
-        correlation = torch.corrcoef(torch.stack([pred_flat, label_flat]))[0, 1].item()
+        correlation = np.corrcoef(all_outputs.flatten(), all_labels.flatten())[0, 1]
         
         return {
             'val_loss': avg_loss,
-            'val_mse_loss': avg_mse_loss,
             'val_mae': mae,
             'val_correlation': correlation
         }

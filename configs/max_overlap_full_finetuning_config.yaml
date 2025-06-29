@@ -1,0 +1,65 @@
+# Galaxy Sommelier Max Overlap Full Fine-tuning Configuration
+
+# Data paths
+data:
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
+  processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/sdss_max_overlap_training_catalog.csv"
+  decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/decals_max_overlap_training_catalog.csv"
+
+# Max Overlap dataset configuration
+mixed_data:
+  use_mixed_dataset: true
+  dataset_name: "MaxOverlapDataset"
+  feature_set: "sdss"
+
+# Model configuration
+model:
+  name: "facebook/dinov2-base"
+  num_outputs: 52 
+  dropout_rate: 0.2
+  freeze_backbone: false  # Fine-tuning: unfreeze backbone
+
+# Training parameters
+training:
+  batch_size: 32
+  learning_rate: 1e-5  # Lower learning rate for fine-tuning
+  num_epochs: 10
+  warmup_steps: 500
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  
+# Preprocessing and Augmentation
+preprocessing:
+  image_size: 224
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+augmentation:
+  rotation_degrees: 180
+  horizontal_flip: true
+  vertical_flip: true
+  brightness_factor: 0.2
+  contrast_factor: 0.2
+
+# Experiment tracking
+wandb:
+  project: "galaxy-sommelier"
+  entity: "sihany"
+  log_freq: 100
+  tags: ["max_overlap", "sdss_decals", "full_finetuning"]
+
+# Hardware
+device: "cuda"
+num_workers: 4
+pin_memory: true
+
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/max_overlap"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/max_overlap"
+
+# Logging
+logging:
+  level: "INFO"
+  save_frequency: 5 

@@ -128,6 +128,23 @@ def main():
         # Combine the matched sample with the random sample
         sdss_training_catalog = pd.concat([matched_sdss_sample, random_sample], ignore_index=True)
 
+    # Ensure asset_id is preserved, as it is used for locating image files
+    if 'asset_id' not in sdss_training_catalog.columns:
+        logging.error("Critical error: 'asset_id' column is missing from the final SDSS catalog.")
+        logging.error("This column is required to find the image files for training.")
+        # Attempt to merge it back in from the original catalog
+        if 'asset_id' in sdss_cat.columns:
+            logging.info("Attempting to merge 'asset_id' back from the master SDSS catalog.")
+            sdss_training_catalog = pd.merge(
+                sdss_training_catalog.drop(columns=['asset_id'], errors='ignore'),
+                sdss_cat[['dr7objid', 'asset_id']],
+                on='dr7objid',
+                how='left'
+            )
+            logging.info(f"Asset IDs merged. Null count: {sdss_training_catalog['asset_id'].isnull().sum()}")
+        else:
+             logging.error("Master SDSS catalog also lacks 'asset_id'. Cannot proceed.")
+             
     logging.info(f"Final SDSS training catalog size: {len(sdss_training_catalog)}")
     logging.info(f"Final DECaLS training catalog size: {len(decals_training_catalog)}")
 
