@@ -1,0 +1,90 @@
+# Galaxy Sommelier Max Overlap - Improved Regularization Configuration
+# Optimized to prevent overfitting with better early stopping and regularization
+
+# Data paths
+data:
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
+  processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/sdss_max_overlap_training_catalog.csv"
+  decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/decals_max_overlap_training_catalog.csv"
+
+# Max Overlap dataset configuration
+mixed_data:
+  use_mixed_dataset: true
+  dataset_name: "MaxOverlapDataset"
+  feature_set: "sdss"
+
+# Model configuration - Increased regularization
+model:
+  name: "facebook/dinov2-base"
+  num_outputs: 52 
+  dropout_rate: 0.3  # Increased from 0.2
+  freeze_backbone: false
+
+# Training parameters - More conservative
+training:
+  batch_size: 16
+  learning_rate: 1e-5
+  backbone_lr: 2e-6  # Even more conservative (was 5e-6)
+  head_lr: 8e-5     # Slightly reduced (was 1e-4)
+  num_epochs: 15    # Increased to allow for early stopping
+  warmup_steps: 2000
+  weight_decay: 0.02  # Increased from 0.01
+  gradient_clip_norm: 0.5  # More aggressive gradient clipping
+  
+# Learning rate scheduling
+lr_schedule:
+  type: "cosine_with_warmup"
+  warmup_ratio: 0.1
+  min_lr_ratio: 0.001  # Lower minimum LR (was 0.01)
+  
+# Data processing
+preprocessing:
+  image_size: 224
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+  
+# More aggressive augmentation
+augmentation:
+  rotation_degrees: 180
+  horizontal_flip: true
+  vertical_flip: true
+  brightness_factor: 0.4  # More aggressive (was 0.3)
+  contrast_factor: 0.4    # More aggressive (was 0.3)
+  gaussian_blur: true
+  gaussian_noise: true
+  cutout: true           # Add cutout augmentation
+  mixup_alpha: 0.2       # Add mixup augmentation
+
+# Improved early stopping - Monitor validation loss
+early_stopping:
+  patience: 3           # Stop after 3 epochs without improvement
+  min_delta: 0.0005     # Smaller threshold for improvement
+  monitor: "val_loss"   # Monitor validation loss (not correlation)
+  mode: "min"           # Minimize validation loss
+
+# Experiment tracking
+wandb:
+  project: "galaxy-sommelier"
+  entity: "sihany"
+  log_freq: 50
+  tags: ["max_overlap", "improved_regularization", "early_stopping_fixed"]
+
+# Hardware
+device: "cuda"
+num_workers: 4
+pin_memory: true
+
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/max_overlap_improved"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/max_overlap_improved"
+
+# Start from your current best model
+pretrained_checkpoint: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/max_overlap/best_model.pt"
+
+# Logging
+logging:
+  level: "INFO"
+  save_frequency: 1  # Save every epoch for better monitoring 

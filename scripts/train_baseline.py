@@ -115,6 +115,10 @@ class GalaxyTrainer:
         self.best_val_loss = float('inf')
         self.training_history = []
         
+        # Early stopping state
+        self.early_stopping_counter = 0
+        self.best_val_metric = float('inf') if self.get_early_stopping_mode() == 'min' else float('-inf')
+        
         # Try to resume from checkpoint if requested
         if self.resume:
             self.load_latest_checkpoint()
@@ -351,6 +355,11 @@ class GalaxyTrainer:
             self.current_epoch = checkpoint['epoch'] + 1  # Start from next epoch
             self.best_val_loss = checkpoint.get('val_loss', float('inf'))
             
+            # Load early stopping state if available
+            self.early_stopping_counter = checkpoint.get('early_stopping_counter', 0)
+            self.best_val_metric = checkpoint.get('best_val_metric', 
+                                                 float('inf') if self.get_early_stopping_mode() == 'min' else float('-inf'))
+            
             # Load scaler state if available
             if 'scaler_state_dict' in checkpoint:
                 self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
@@ -370,6 +379,68 @@ class GalaxyTrainer:
             self.current_epoch = 0
             self.best_val_loss = float('inf')
             self.training_history = []
+    
+    def get_early_stopping_config(self):
+        """Get early stopping configuration with defaults"""
+        es_config = self.config.get('early_stopping', {})
+        return {
+            'patience': es_config.get('patience', 5),
+            'min_delta': es_config.get('min_delta', 0.001),
+            'monitor': es_config.get('monitor', 'val_loss'),
+            'mode': es_config.get('mode', 'min')  # 'min' for loss, 'max' for correlation
+        }
+    
+    def get_early_stopping_mode(self):
+        """Get early stopping mode"""
+        es_config = self.get_early_stopping_config()
+        monitor = es_config['monitor']
+        if 'loss' in monitor.lower():
+            return 'min'
+        elif 'correlation' in monitor.lower() or 'accuracy' in monitor.lower():
+            return 'max'
+        else:
+            return es_config.get('mode', 'min')
+    
+    def check_early_stopping(self, current_metrics):
+        """Check if we should stop training based on early stopping criteria"""
+        es_config = self.get_early_stopping_config()
+        monitor_metric = es_config['monitor']
+        patience = es_config['patience']
+        min_delta = es_config['min_delta']
+        mode = self.get_early_stopping_mode()
+        
+        # Get current metric value
+        current_value = current_metrics.get(monitor_metric)
+        if current_value is None:
+            logger.warning(f"Early stopping metric '{monitor_metric}' not found in metrics")
+            return False
+        
+        # Check for improvement
+        improved = False
+        if mode == 'min':
+            if current_value < self.best_val_metric - min_delta:
+                improved = True
+                self.best_val_metric = current_value
+        else:  # mode == 'max'
+            if current_value > self.best_val_metric + min_delta:
+                improved = True
+                self.best_val_metric = current_value
+        
+        if improved:
+            self.early_stopping_counter = 0
+            logger.info(f"Early stopping metric improved: {monitor_metric} = {current_value:.4f}")
+        else:
+            self.early_stopping_counter += 1
+            logger.info(f"Early stopping metric did not improve: {monitor_metric} = {current_value:.4f} "
+                       f"(counter: {self.early_stopping_counter}/{patience})")
+        
+        # Check if we should stop
+        should_stop = self.early_stopping_counter >= patience
+        if should_stop:
+            logger.info(f"Early stopping triggered! No improvement in {monitor_metric} "
+                       f"for {patience} epochs.")
+        
+        return should_stop
     
     def train_epoch(self):
         """Run one training epoch"""
@@ -499,7 +570,9 @@ class GalaxyTrainer:
             'scaler_state_dict': self.scaler.state_dict(),
             'val_loss': metrics['val_loss'],
             'config': self.config,
-            'training_history': self.training_history
+            'training_history': self.training_history,
+            'early_stopping_counter': self.early_stopping_counter,
+            'best_val_metric': self.best_val_metric
         }
         
         # Regular checkpoint
@@ -562,6 +635,11 @@ class GalaxyTrainer:
             # Save checkpoint
             if (epoch + 1) % self.config['logging']['save_frequency'] == 0 or is_best:
                 self.save_checkpoint(epoch_metrics, is_best)
+            
+            # Check for early stopping
+            if self.check_early_stopping(epoch_metrics):
+                logger.info("Early stopping triggered. Training stopped.")
+                break
         
         # Save final training history
         history_path = Path(self.config.get('results_dir', './results')) / 'training_history.json'
