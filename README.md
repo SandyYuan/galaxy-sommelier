@@ -97,6 +97,10 @@ To see exactly where the mixed-survey model improves, we can compare the per-tas
 
 The mixed-survey model shows improved correlation across all available features, with the most significant gains in identifying bar and spiral features. This confirms that training on more diverse data leads to a more robust and generalizable model.
 
+## Maximum Overlap Experiment
+
+We also tested a "maximum overlap" approach, training on galaxies that appear in both SDSS and DECaLS surveys to maximize cross-survey consistency. However, this approach achieved lower performance (0.796 correlation) compared to the mixed random sampling approach (0.810 correlation), suggesting that dataset diversity is more beneficial for generalization than cross-survey overlap.
+
 <!-- ## Phase 1: Foundation Setup ✅
 
 **Status**: Implementation Complete
