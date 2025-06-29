@@ -427,7 +427,10 @@ class GalaxyTrainer:
                     'epoch': self.current_epoch,
                     'step': i + self.current_epoch * len(self.train_loader)
                 }
-                log_metrics.update({f'train_{k}_step': v.item() for k, v in loss_dict.items() if k != 'total_loss'})
+                log_metrics.update({
+                    f'train_{k}_step': v.item() if torch.is_tensor(v) else v 
+                    for k, v in loss_dict.items() if k != 'total_loss'
+                })
                 self.wandb.log(log_metrics)
         
         return {'train_loss': total_loss / len(self.train_loader)}
@@ -574,43 +577,32 @@ class GalaxyTrainer:
             self.wandb.finish()
 
 def main():
-    """Main function for command-line usage"""
-    parser = argparse.ArgumentParser(description="Train Galaxy Sommelier baseline model")
-    parser.add_argument("--config", default="configs/base_config.yaml",
-                       help="Path to configuration file")
-    parser.add_argument("--sample-size", type=int, default=None,
-                       help="Use subset of data for testing")
-    parser.add_argument("--wandb", action="store_true",
-                       help="Use Weights & Biases for logging")
-    parser.add_argument("--epochs", type=int, default=None,
-                       help="Number of epochs to train")
-    parser.add_argument("--no-resume", action="store_true",
-                       help="Start training from scratch instead of resuming")
+    """Main entry point for training."""
+    parser = argparse.ArgumentParser(description="Galaxy Sommelier Baseline Training")
+    parser.add_argument('--config', type=str, required=True, help="Path to the training configuration file")
+    parser.add_argument('--sample_size', type=int, default=None, help="Use a subset of the data for quick testing")
+    parser.add_argument('--wandb', action='store_true', help="Enable Weights & Biases logging")
+    parser.add_argument('--no-resume', action='store_false', dest='resume', help="Do not resume from latest checkpoint")
     
     args = parser.parse_args()
     
-    # Check if config exists
-    if not Path(args.config).exists():
-        logger.error(f"Configuration file not found: {args.config}")
-        return
+    config_path = Path(args.config)
+    if not config_path.is_file():
+        logger.error(f"Configuration file not found: {config_path}")
+        sys.exit(1)
+
+    logger.info(f"Loading configuration from: {config_path}")
     
-    try:
-        # Initialize trainer
-        trainer = GalaxyTrainer(
-            config_path=args.config,
-            sample_size=args.sample_size,
-            use_wandb=args.wandb,
-            resume=not args.no_resume
-        )
-        
-        # Start training
-        trainer.train(num_epochs=args.epochs)
-        
-    except KeyboardInterrupt:
-        logger.info("Training interrupted by user")
-    except Exception as e:
-        logger.error(f"Training failed: {e}")
-        raise
+    # Initialize trainer
+    trainer = GalaxyTrainer(
+        config_path=args.config,
+        sample_size=args.sample_size,
+        use_wandb=args.wandb,
+        resume=args.resume
+    )
+    
+    # Start training
+    trainer.train()
 
 if __name__ == "__main__":
     main() 

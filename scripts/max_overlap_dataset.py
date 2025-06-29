@@ -63,7 +63,14 @@ class MaxOverlapDataset(Dataset):
         """Adds image paths to catalog and identifies common features."""
         
         logger.info("Assigning image paths...")
-        self.catalog['image_path'] = self.catalog.apply(self.get_image_path, axis=1)
+        
+        # More efficient way to add image paths - avoid fragmentation warning
+        image_paths = []
+        for idx, row in self.catalog.iterrows():
+            image_paths.append(self.get_image_path(row))
+        
+        self.catalog = self.catalog.copy()  # Defragment before adding column
+        self.catalog['image_path'] = image_paths
         
         # Drop galaxies where image path could not be found
         original_count = len(self.catalog)
@@ -76,7 +83,22 @@ class MaxOverlapDataset(Dataset):
     def get_image_path(self, row):
         """Gets the full path to a galaxy's image file."""
         if row['survey'] == 'sdss':
-            objid = row['dr7objid']
+            # Handle different possible SDSS object ID column names
+            # Try asset_id first (this is what the working mixed_dataset.py uses)
+            objid = None
+            if 'asset_id' in row and pd.notna(row['asset_id']):
+                objid = int(row['asset_id'])
+            else:
+                # Fall back to other ID columns
+                objid_keys = ['specobjid', 'objid', 'dr7objid']
+                for key in objid_keys:
+                    if key in row and pd.notna(row[key]):
+                        objid = int(row[key])
+                        break
+            
+            if objid is None:
+                return None
+
             # Try different SDSS image naming conventions
             for name_template in ["{objid}.jpg", "sdss_{objid}.jpg"]:
                 path = self.sdss_image_dir / name_template.format(objid=objid)
@@ -123,10 +145,10 @@ class MaxOverlapDataset(Dataset):
         # Load image
         try:
             image = Image.open(row['image_path']).convert('RGB')
-        except FileNotFoundError:
-            logger.error(f"Image not found at {row['image_path']}. Skipping.")
-            # Return a dummy item or handle this case appropriately
-            return self.__getitem__((idx + 1) % len(self)) 
+        except (FileNotFoundError, OSError) as e:
+            logger.warning(f"Image not found at {row['image_path']}: {e}. Using black placeholder.")
+            # Return a black placeholder image instead of recursive fallback
+            image = Image.new('RGB', (224, 224), color=(0, 0, 0))
 
         # Apply transformations
         if self.transform:
