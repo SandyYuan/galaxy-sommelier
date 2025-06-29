@@ -155,6 +155,25 @@ def load_shared_features(filepath):
             features.append(feature_name)
     return features
 
+def get_model_features_from_config(config_path, model_path):
+    """Determine model features based on config and validate against model size."""
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Check if this is a mixed dataset model
+    mixed_config = config.get('mixed_data', {})
+    if mixed_config.get('use_mixed_dataset', False):
+        dataset_name = mixed_config.get('dataset_name', 'MixedSDSSDECaLSDataset')
+        if dataset_name == "MaxOverlapDataset":
+            print(f"Detected MaxOverlapDataset model: {model_path}")
+            return load_shared_features(SHARED_FEATURES_FILE)  # Max overlap uses same feature set as mixed
+        else:
+            print(f"Detected Mixed SDSS+DECaLS model: {model_path}")
+            return load_shared_features(SHARED_FEATURES_FILE)
+    else:
+        print(f"Detected SDSS-only model: {model_path}")
+        return get_sdss_feature_columns(SDSS_CATALOG_PATH)
+
 def run_comparison(args):
     """Runs the two-model comparison."""
     print("Running in comparison mode...")
@@ -167,38 +186,55 @@ def run_comparison(args):
     ukidss_dataset = load_ukidss_data()
 
     # Get predictions
-    preds1, true_labels = get_predictions(model1, device, ukidss_dataset)
-    preds2, _ = get_predictions(model2, device, ukidss_dataset)
-
-    # ... (rest of comparison logic as before) ...
-    # This part needs to be adapted to use the generic preds1, preds2 etc.
-    # For now, let's assume model1 is SDSS and model2 is Mixed for simplicity of refactoring.
+    model1_preds, true_labels = get_predictions(model1, device, ukidss_dataset)
+    model2_preds, _ = get_predictions(model2, device, ukidss_dataset)
     
-    sdss_preds, mixed_preds = preds1, preds2
-    
-    print(f"Model 1 predictions shape: {sdss_preds.shape}")
-    print(f"Model 2 predictions shape: {mixed_preds.shape}")
+    print(f"Model 1 predictions shape: {model1_preds.shape}")
+    print(f"Model 2 predictions shape: {model2_preds.shape}")
     print(f"True labels shape: {true_labels.shape}")
     
-    # The rest of the logic from the original main function follows...
+    # Get feature columns for each model based on their configs
     ukidss_label_columns = ukidss_dataset.label_columns
-    all_shared_features = load_shared_features(SHARED_FEATURES_FILE)
-    comparison_features = [f for f in all_shared_features if f in ukidss_label_columns and "fraction" in f]
-    print(f"\nFound {len(comparison_features)} features common to all models and the UKIDSS dataset for comparison.")
+    
+    model1_features = get_model_features_from_config(args.model1_config, args.model1_path)
+    model2_features = get_model_features_from_config(args.model2_config, args.model2_path)
+    
+    # Validate feature counts match model outputs
+    if len(model1_features) != args.model1_features:
+        print(f"WARNING: Model1 config suggests {len(model1_features)} features, but --model1_features={args.model1_features}")
+        # Truncate to actual model size
+        model1_features = model1_features[:args.model1_features]
+    
+    if len(model2_features) != args.model2_features:
+        print(f"WARNING: Model2 config suggests {len(model2_features)} features, but --model2_features={args.model2_features}")
+        # Truncate to actual model size  
+        model2_features = model2_features[:args.model2_features]
+    
+    # Find common features between both models and UKIDSS
+    comparison_features = []
+    for feature in ukidss_label_columns:
+        if feature in model1_features and feature in model2_features and "fraction" in feature:
+            comparison_features.append(feature)
+    
+    print(f"\nFound {len(comparison_features)} features common to both models and UKIDSS dataset.")
+    print(f"Model 1 features: {len(model1_features)} total")
+    print(f"Model 2 features: {len(model2_features)} total")
+    
+    # Get indices for each model
+    model1_indices = [model1_features.index(f) for f in comparison_features]
+    model2_indices = [model2_features.index(f) for f in comparison_features]
+    ukidss_indices = [ukidss_label_columns.index(f) for f in comparison_features]
+    
+    # Extract relevant predictions and labels
+    model1_preds_final = model1_preds[:, model1_indices]
+    model2_preds_final = model2_preds[:, model2_indices]
+    true_labels_final = true_labels[:, ukidss_indices]
+    
+    print(f"Model 1 final predictions: {model1_preds_final.shape}")
+    print(f"Model 2 final predictions: {model2_preds_final.shape}")
+    print(f"True labels final: {true_labels_final.shape}")
 
-    sdss_all_features = get_sdss_feature_columns(SDSS_CATALOG_PATH)
-    sdss_indices = [sdss_all_features.index(f) for f in comparison_features]
-    sdss_preds_final = sdss_preds[:, sdss_indices]
-
-    mixed_indices = [all_shared_features.index(f) for f in comparison_features]
-    mixed_preds_final = mixed_preds[:, mixed_indices]
-
-    true_labels_indices = [ukidss_label_columns.index(f) for f in comparison_features]
-    true_labels_final = true_labels[:, true_labels_indices]
-
-    print(f"  True labels: {true_labels_final.shape}")
-
-    print_metrics_table(sdss_preds_final, mixed_preds_final, true_labels_final, comparison_features)
+    print_metrics_table(model1_preds_final, model2_preds_final, true_labels_final, comparison_features)
 
 def run_single_benchmark(args):
     """Runs a benchmark on a single model."""

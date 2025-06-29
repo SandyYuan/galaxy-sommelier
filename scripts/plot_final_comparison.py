@@ -8,7 +8,7 @@ def plot_per_task_correlation():
     Generates and saves a bar plot comparing the per-task correlation
     for the SDSS-only, Mixed, and Max Overlap models.
     """
-    output_dir = Path("benchmark_results/comparison_plots")
+    output_dir = Path("plots/comparison_plots")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Data from the latest comparison runs with corrected max overlap model (epoch 3)
@@ -25,7 +25,7 @@ def plot_per_task_correlation():
             't02_edgeon_a05_no_fraction'
         ],
         'SDSS-only Correlation': [0.504843, 0.471730, 0.357965, 0.663404, 0.471244, 0.830521, 0.805700, 0.748225, 0.658756],
-        'Mixed Model Correlation': [0.578755, 0.543781, 0.425297, 0.698296, 0.519300, 0.774724, 0.726697, 0.795632, 0.693946],
+        'Mixed Model Correlation': [0.589888, 0.554826, 0.426390, 0.729861, 0.534782, 0.893810, 0.864938, 0.800587, 0.698937],
         'Max Overlap Correlation': [0.440979, 0.340584, 0.238200, 0.590113, 0.302107, 0.753756, 0.667092, 0.712984, 0.542849]
     }
     df = pd.DataFrame(data)
@@ -86,7 +86,7 @@ def plot_overall_metrics_comparison():
     """
     Creates a summary plot comparing overall metrics across all three models.
     """
-    output_dir = Path("benchmark_results/comparison_plots")
+    output_dir = Path("plots/comparison_plots")
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Overall metrics from latest comparison
