@@ -26,11 +26,11 @@ echo "Step 2: Starting Full Fine-tuning (Unfrozen Backbone)..."
 echo "Configuration: configs/max_overlap_full_finetuning_config.yaml"
 echo "Training for 10 epochs with unfrozen DINOv2 backbone"
 
-# The --no-resume flag is intentionally omitted here to allow
-# the fine-tuning to load the checkpoint from the head training.
+# Run full fine-tuning (will automatically load from head training checkpoint)
 python scripts/train_baseline.py \
     --config configs/max_overlap_full_finetuning_config.yaml \
-    --wandb
+    --wandb \
+    --no-resume
 
 echo "=== Max Overlap Training Pipeline Completed ==="
 FINAL_MODEL_PATH="/pscratch/sd/s/sihany/galaxy-sommelier-data/models/max_overlap/best_model.pt"
