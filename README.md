@@ -24,10 +24,10 @@ Our initial training on a single survey (SDSS) demonstrates strong performance, 
 
 
 **Overall Performance Comparison**
-![Performance Summary](benchmark_results/comparison_plots/performance_summary.png)
+![Performance Summary](plots/comparison_plots/performance_summary.png)
 
 **Distribution Comparison: True vs Predicted**
-![Distribution Comparison](benchmark_results/comparison_plots/distribution_comparison.png)
+![Distribution Comparison](plots/comparison_plots/distribution_comparison.png)
 
 
 ### Key Morphological Features Performance
@@ -66,7 +66,7 @@ We tested the model's generalization capabilities by evaluating on **UKIDSS** da
 ### Performance Visualization
 
 **Out-of-Distribution Performance**
-![OOD Performance](ood_results/ood_performance_comparison.png)
+![OOD Performance](plots/ood_results/ood_performance_comparison.png)
 
 The plots above demonstrate the improvement from pretrained baseline through head training to full fine-tuning for the SDSS-only model.
 
@@ -93,7 +93,7 @@ The model trained on the mixed-survey dataset demonstrated superior performance 
 
 To see exactly where the mixed-survey model improves, we can compare the per-task correlation on the 9 features available in the UKIDSS dataset.
 
-![Per-Task Correlation Comparison](benchmark_results/comparison_plots/per_task_correlation_comparison.png)
+![Per-Task Correlation Comparison](plots/comparison_plots/per_task_correlation_comparison.png)
 
 The mixed-survey model shows improved correlation across all available features, with the most significant gains in identifying bar and spiral features. This confirms that training on more diverse data leads to a more robust and generalizable model.
 
