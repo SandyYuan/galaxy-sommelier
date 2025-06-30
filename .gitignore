@@ -1,2 +1,6 @@
 wandb/
 models/
+
+*.pyc 
+
+nohup.out

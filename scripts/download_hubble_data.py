@@ -76,7 +76,8 @@ class HubbleImageDownloader:
     def __init__(self, output_dir: str = 'data/hubble', 
                  cutout_size: int = 256, 
                  pixel_scale: float = 0.05,
-                 save_png: bool = False):
+                 save_png: bool = False,
+                 preferred_filter: str = 'F814W'):
         """
         Initialize the downloader
         
@@ -90,6 +91,8 @@ class HubbleImageDownloader:
             Pixel scale in arcsec/pixel (default: 0.05 for HST)
         save_png : bool
             Whether to save PNG versions of images (default: False)
+        preferred_filter : str
+            Preferred HST filter (default: 'F814W')
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -98,6 +101,7 @@ class HubbleImageDownloader:
         self.pixel_scale = pixel_scale
         self.cutout_radius = (cutout_size * pixel_scale) / 2.0  # arcsec
         self.save_png = save_png and PNG_AVAILABLE
+        self.preferred_filter = preferred_filter.upper()
         
         # Create subdirectories
         (self.output_dir / 'images').mkdir(exist_ok=True)
@@ -242,14 +246,30 @@ class HubbleImageDownloader:
                 self.logger.debug(f"No drizzled products found for {galaxy.zooniverse_id}")
                 return None
             
+            # Filter for preferred filter images specifically
+            filenames = np.array(drizzled_products['productFilename'])
+            filter_mask = np.array([self.preferred_filter.lower() in fn.lower() for fn in filenames])
+            filter_products = drizzled_products[filter_mask]
+            
+            if len(filter_products) == 0:
+                self.logger.debug(f"No {self.preferred_filter} drizzled products found for {galaxy.zooniverse_id}")
+                # Fall back to any drizzled product if preferred filter not found
+                self.logger.debug(f"Available products: {list(filenames)}")
+                filter_products = drizzled_products
+            else:
+                self.logger.debug(f"Found {len(filter_products)} {self.preferred_filter} products for {galaxy.zooniverse_id}")
+                
+            # Use preferred filter products (or fallback to any drizzled products)
+            selected_products = filter_products
+            
             # Download the first drizzled product to temp directory
             temp_dir = self.output_dir / 'temp'
             temp_dir.mkdir(exist_ok=True)
             
-            self.logger.debug(f"Downloading {drizzled_products[0]['productFilename']} for {galaxy.zooniverse_id}")
+            self.logger.debug(f"Downloading {selected_products[0]['productFilename']} for {galaxy.zooniverse_id}")
             
             download_result = Observations.download_products(
-                drizzled_products[0:1],
+                selected_products[0:1],
                 download_dir=str(temp_dir)
             )
             
@@ -576,6 +596,12 @@ Examples:
         help='Also save PNG versions of images for visualization'
     )
     
+    parser.add_argument(
+        '--filter',
+        default='F814W',
+        help='Preferred HST filter for downloads (default: F814W)'
+    )
+    
     args = parser.parse_args()
     
     # Validate arguments
@@ -589,7 +615,8 @@ Examples:
     downloader = HubbleImageDownloader(
         output_dir=args.output_dir,
         cutout_size=args.cutout_size,
-        save_png=args.save_png
+        save_png=args.save_png,
+        preferred_filter=args.filter
     )
     
     # Load catalog (will automatically filter for COSMOS)
