@@ -30,7 +30,7 @@ class MixedSDSSDECaLSDataset(Dataset):
     def __init__(self, sdss_catalog_path, decals_catalog_path, 
                  sdss_image_dir, decals_image_dir,
                  sdss_fraction=0.5, max_galaxies=None, transform=None, 
-                 feature_set='sdss', random_seed=42):
+                 feature_set='sdss', random_seed=42, high_quality=False):
         """
         Args:
             sdss_catalog_path: Path to SDSS catalog CSV
@@ -42,18 +42,21 @@ class MixedSDSSDECaLSDataset(Dataset):
             transform: Image transforms to apply
             feature_set: 'sdss' or 'decals' - which feature naming convention to use
             random_seed: Random seed for reproducible sampling
+            high_quality: If True, select SDSS galaxies with highest classification counts
         """
         self.sdss_image_dir = Path(sdss_image_dir)
         self.decals_image_dir = Path(decals_image_dir)
         self.transform = transform
         self.feature_set = feature_set
         self.random_seed = random_seed
+        self.high_quality = high_quality
         
         # Set random seed for reproducible sampling
         random.seed(random_seed)
         np.random.seed(random_seed)
         
-        logger.info(f"Loading mixed dataset with {sdss_fraction:.1%} SDSS, {1-sdss_fraction:.1%} DECaLS")
+        quality_mode = "high-quality" if high_quality else "random"
+        logger.info(f"Loading mixed dataset with {sdss_fraction:.1%} SDSS ({quality_mode}), {1-sdss_fraction:.1%} DECaLS")
         
         # Load and prepare catalogs
         self.load_catalogs(sdss_catalog_path, decals_catalog_path)
@@ -169,7 +172,16 @@ class MixedSDSSDECaLSDataset(Dataset):
         logger.info(f"Sampling {sdss_count} SDSS + {decals_count} DECaLS galaxies")
         
         # Sample galaxies
-        sdss_sample = self.sdss_catalog.sample(n=sdss_count, random_state=self.random_seed)
+        if self.high_quality:
+            # Select SDSS galaxies with highest classification counts (total_votes)
+            # First, ensure total_votes column exists and handle NaN values
+            sdss_votes = self.sdss_catalog['total_votes'].fillna(0)
+            # Sort by total_votes in descending order and take top sdss_count
+            sdss_sample = self.sdss_catalog.loc[sdss_votes.nlargest(sdss_count).index]
+            logger.info(f"Selected SDSS galaxies with vote counts: {sdss_votes.nlargest(sdss_count).min():.0f} to {sdss_votes.nlargest(sdss_count).max():.0f}")
+        else:
+            sdss_sample = self.sdss_catalog.sample(n=sdss_count, random_state=self.random_seed)
+            
         decals_sample = self.decals_catalog.sample(n=decals_count, random_state=self.random_seed)
         
         # Create unified catalog
@@ -260,7 +272,7 @@ class MixedSDSSDECaLSDataset(Dataset):
             # Could add these back with a custom collate function if needed
         }
 
-def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None):
+def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None, high_quality=False):
     """Create mixed SDSS+DECaLS data loaders"""
     
     import yaml
@@ -285,7 +297,8 @@ def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None):
         sdss_fraction=sdss_fraction,
         max_galaxies=sample_size,
         transform=None,  # Will be set per split
-        feature_set='sdss'  # Use SDSS feature naming
+        feature_set='sdss',  # Use SDSS feature naming
+        high_quality=high_quality
     )
     
     # Split dataset  
@@ -319,7 +332,8 @@ def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None):
         max_galaxies=sample_size,
         transform=get_transforms('val'),
         feature_set='sdss',
-        random_seed=42  # Same seed for consistent splits
+        random_seed=42,  # Same seed for consistent splits
+        high_quality=high_quality
     )
     val_dataset = torch.utils.data.Subset(val_dataset_with_transform, val_indices)
     
@@ -332,7 +346,8 @@ def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None):
         max_galaxies=sample_size,
         transform=get_transforms('val'),
         feature_set='sdss',
-        random_seed=42  # Same seed for consistent splits
+        random_seed=42,  # Same seed for consistent splits
+        high_quality=high_quality
     )
     test_dataset = torch.utils.data.Subset(test_dataset_with_transform, test_indices)
     
