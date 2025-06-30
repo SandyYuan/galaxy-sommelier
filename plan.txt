@@ -13,6 +13,7 @@ Build a state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning t
 ## LATEST UPDATE: Phase 2 Complete ✅ (OOD Generalization Study)
 - **Objective**: Tested if training on diverse data (SDSS+DECaLS) improves generalization on an unseen survey (UKIDSS).
 - **Outcome**: **Success**. The mixed-survey model significantly outperformed the SDSS-only model (0.857 vs 0.819 correlation), confirming the hypothesis.
+- **Additional Test**: Evaluated if high-quality SDSS data (higher classification counts) improves OOD performance. The high-quality mixed model achieved 0.855 correlation vs 0.857 for the original mixed model, showing minimal difference.
 - **Key Actions**:
     - Created a unified evaluation script: `scripts/compare_models.py`.
     - Consolidated evaluation logic, replacing older scripts.

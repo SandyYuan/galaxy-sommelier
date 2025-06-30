@@ -101,6 +101,10 @@ The mixed-survey model shows improved correlation across all available features,
 
 We also tested a "maximum overlap" approach, training on galaxies that appear in both SDSS and DECaLS surveys to maximize cross-survey consistency. However, this approach achieved lower performance (0.796 correlation) compared to the mixed random sampling approach (0.810 correlation), suggesting that dataset diversity is more beneficial for generalization than cross-survey overlap.
 
+## High Quality Data Experiment
+
+We further tested whether using higher quality SDSS data (galaxies with higher classification counts) would improve out-of-distribution performance. The high-quality mixed model achieved 0.855 correlation compared to 0.857 for the original mixed model, showing minimal difference and suggesting that data quality filtering provides limited benefits beyond the base dataset quality.
+
 <!-- ## Phase 1: Foundation Setup ✅
 
 **Status**: Implementation Complete
