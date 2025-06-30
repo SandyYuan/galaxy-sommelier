@@ -207,12 +207,16 @@ class GalaxyTrainer:
                 from mixed_dataset import create_mixed_data_loaders
                 
                 sdss_fraction = mixed_config.get('sdss_fraction', 0.5)
+                high_quality = mixed_config.get('high_quality', False)
                 logger.info(f"SDSS fraction: {sdss_fraction:.1%}")
+                if high_quality:
+                    logger.info("Using high-quality SDSS galaxy selection (highest classification counts)")
                 
                 self.train_loader, self.val_loader, self.test_loader = create_mixed_data_loaders(
                     self.config_path, 
                     sdss_fraction=sdss_fraction,
-                    sample_size=self.sample_size
+                    sample_size=self.sample_size,
+                    high_quality=high_quality
                 )
                 # The rest is handled inside create_mixed_data_loaders, so we can return
                 return
@@ -255,7 +259,8 @@ class GalaxyTrainer:
         if use_mixed:
             wandb_data.update({
                 'dataset_type': 'mixed_sdss_decals',
-                'sdss_fraction': mixed_config.get('sdss_fraction', 0.5)
+                'sdss_fraction': mixed_config.get('sdss_fraction', 0.5),
+                'high_quality_sdss': mixed_config.get('high_quality', False)
             })
         else:
             wandb_data['dataset_type'] = 'sdss_only'

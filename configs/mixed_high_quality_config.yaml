@@ -1,0 +1,107 @@
+# Galaxy Sommelier Mixed SDSS+DECaLS High Quality Full Fine-tuning Configuration
+
+# Data paths
+data:
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
+  desi_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/desi"
+  hst_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/hst"
+  processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
+  catalog_name: "gz2_master_catalog_corrected.csv"  # SDSS catalog
+  
+# Mixed dataset configuration with high quality SDSS selection
+mixed_data:
+  sdss_fraction: 0.5  # 50% SDSS, 50% DECaLS
+  use_mixed_dataset: true
+  feature_set: "sdss"  # Use SDSS feature naming convention
+  high_quality: true  # NEW: Select SDSS galaxies with highest classification counts
+
+# Model configuration (same as SDSS training)
+model:
+  name: "facebook/dinov2-base"
+  num_outputs: 52  # Number of overlapping features between SDSS and DECaLS
+  dropout_rate: 0.2
+  freeze_backbone: false  # Full finetuning: unfreeze backbone
+
+# Training parameters for full fine-tuning (same as SDSS)
+training:
+  batch_size: 16  # Reduce batch size since full model uses more memory
+  learning_rate: 1e-5  # Lower LR for backbone fine-tuning
+  backbone_lr: 5e-6  # Even lower LR for pre-trained backbone
+  head_lr: 1e-4  # Higher LR for classification head
+  num_epochs: 10  # More epochs for full fine-tuning
+  warmup_steps: 2000  # More warmup for stable training
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  
+# Learning rate scheduling
+lr_schedule:
+  type: "cosine_with_warmup"
+  warmup_ratio: 0.1  # 10% of training for warmup
+  min_lr_ratio: 0.01  # Minimum LR as 1% of initial
+  
+# Data processing
+preprocessing:
+  image_size: 224
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+  
+# Augmentation (more aggressive for full fine-tuning)
+augmentation:
+  rotation_degrees: 180
+  horizontal_flip: true
+  vertical_flip: true
+  brightness_factor: 0.3  # Slightly more aggressive
+  contrast_factor: 0.3
+  gaussian_blur: true  # Add blur augmentation
+  gaussian_noise: true  # Add noise augmentation
+
+# Galaxy Zoo tasks (core overlapping tasks)
+galaxy_zoo_tasks:
+  t01:
+    responses: ["smooth", "features_or_disk", "star_or_artifact"]
+    description: "Is the galaxy smooth and rounded, or does it have features?"
+  t02:
+    responses: ["edge_on_yes", "edge_on_no"]
+    description: "Could this be a disk viewed edge-on?"
+  t03:
+    responses: ["bar_yes", "bar_no"]
+    description: "Is there a bar feature through the center of the galaxy?"
+  t04:
+    responses: ["spiral_yes", "spiral_no"]
+    description: "Is there any sign of a spiral arm pattern?"
+  t05:
+    responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
+    description: "How prominent is the central bulge?"
+
+# Experiment tracking
+wandb:
+  project: "galaxy-sommelier"
+  entity: "sihany"
+  log_freq: 50  # Log more frequently
+  tags: ["mixed_dataset", "sdss_decals", "high_quality", "full_finetuning", "50_50_split", "unfrozen_backbone"]
+
+# Hardware
+device: "cuda"
+num_workers: 4
+pin_memory: true
+
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_high_quality"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/mixed_high_quality"
+
+# Initialization - start from high-quality head-trained model
+pretrained_checkpoint: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_high_quality/best_model.pt"
+
+# Logging
+logging:
+  level: "INFO"
+  save_frequency: 2  # Save model every 2 epochs
+  
+# Early stopping
+early_stopping:
+  patience: 3  # Stop if no improvement for 3 epochs
+  min_delta: 0.001  # Minimum improvement threshold
+  monitor: "val_correlation"  # Monitor validation correlation 
