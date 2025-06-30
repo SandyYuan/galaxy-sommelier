@@ -91,6 +91,140 @@ class SurveyOverlapAnalyzer:
         
         return self.matched_catalog
         
+    def get_ukidss_ood_features(self):
+        """Define the features used for UKIDSS out-of-distribution analysis"""
+        # All 11 features available in UKIDSS dataset (from ood_evaluation.py)
+        self.ukidss_ood_features = [
+            't01_smooth_or_features_a01_smooth_fraction',
+            't01_smooth_or_features_a02_features_or_disk_fraction', 
+            't01_smooth_or_features_a03_star_or_artifact_fraction',
+            't02_edgeon_a04_yes_fraction',
+            't02_edgeon_a05_no_fraction',
+            't03_bar_a06_bar_fraction',
+            't03_bar_a07_no_bar_fraction',
+            't04_spiral_a08_spiral_fraction',
+            't04_spiral_a09_no_spiral_fraction',
+            't06_odd_a14_yes_fraction',
+            't06_odd_a15_no_fraction'
+        ]
+        
+        # The exact 9 features that were actually used in UKIDSS OOD comparison
+        # (from plot_final_comparison.py - these are the features common to both models and UKIDSS)
+        self.key_9_ood_features = [
+            't01_smooth_or_features_a02_features_or_disk_fraction',    # 1. Features/Disk  
+            't01_smooth_or_features_a01_smooth_fraction',              # 2. Smooth
+            't02_edgeon_a04_yes_fraction',                             # 3. Edge-on
+            't04_spiral_a08_spiral_fraction',                          # 4. Spiral
+            't02_edgeon_a05_no_fraction',                              # 5. Not Edge-on
+            't03_bar_a06_bar_fraction',                                # 6. Bar
+            't04_spiral_a09_no_spiral_fraction',                       # 7. No Spiral
+            't01_smooth_or_features_a03_star_or_artifact_fraction',    # 8. Star/Artifact
+            't03_bar_a07_no_bar_fraction'                              # 9. No Bar
+        ]
+        
+        # Features from UKIDSS dataset that were NOT used in comparison (missing from models)
+        self.excluded_ood_features = [
+            't06_odd_a14_yes_fraction',   # Odd features (yes) - not in model features
+            't06_odd_a15_no_fraction'     # Odd features (no) - not in model features
+        ]
+        
+        return self.ukidss_ood_features, self.key_9_ood_features
+        
+    def apply_quality_filtering(self, strategy='moderate', min_classifications=40, 
+                              use_weighted_fractions=True, verbose=True):
+        """
+        Apply quality filtering to SDSS catalog based on classification reliability
+        
+        Quality indicators available in SDSS Galaxy Zoo 2:
+        - total_classifications: Total number of people who classified each galaxy (16-79, mean=42.6)
+        - total_votes: Total votes across all tasks  
+        - *_count: Number of votes for each specific morphological feature
+        - *_weighted_fraction: Vote fractions weighted by classifier reliability
+        - *_flag: Quality flags (1=sufficient votes, 0=insufficient)
+        
+        Args:
+            strategy: 'conservative' (50+ classifications, 10.5% of data)
+                     'moderate' (40+ classifications, 73.1% of data) 
+                     'permissive' (30+ classifications, 98.4% of data)
+            min_classifications: Custom threshold for total_classifications
+            use_weighted_fractions: Use weighted_fraction instead of fraction for features
+            verbose: Print filtering results
+        """
+        
+        if verbose:
+            print(f"\n" + "=" * 80)
+            print("APPLYING QUALITY FILTERING TO SDSS CATALOG")
+            print("=" * 80)
+            print(f"Original SDSS catalog: {len(self.sdss_catalog):,} galaxies")
+        
+        # Apply classification count threshold
+        if strategy == 'conservative':
+            threshold = 50
+        elif strategy == 'moderate':
+            threshold = 40
+        elif strategy == 'permissive':
+            threshold = 30
+        elif strategy == 'custom':
+            threshold = min_classifications
+        else:
+            threshold = min_classifications
+            
+        filtered_catalog = self.sdss_catalog[
+            self.sdss_catalog['total_classifications'] >= threshold
+        ].copy()
+        
+        if verbose:
+            remaining_pct = len(filtered_catalog) / len(self.sdss_catalog) * 100
+            print(f"After {threshold}+ classifications filter: {len(filtered_catalog):,} galaxies ({remaining_pct:.1f}%)")
+            
+            # Show quality improvement for key OOD features
+            print(f"\nQuality improvement for key OOD features:")
+            ood_features = [
+                't01_smooth_or_features_a01_smooth_count',
+                't01_smooth_or_features_a02_features_or_disk_count',
+                't02_edgeon_a04_yes_count',
+                't03_bar_a06_bar_count',
+                't04_spiral_a08_spiral_count'
+            ]
+            
+            for feature in ood_features:
+                if feature in self.sdss_catalog.columns:
+                    orig_mean = self.sdss_catalog[feature].mean()
+                    filt_mean = filtered_catalog[feature].mean()
+                    improvement = (filt_mean - orig_mean) / orig_mean * 100
+                    feature_name = feature.replace('_count', '').replace('t01_smooth_or_features_a01_', 'smooth').replace('t01_smooth_or_features_a02_', 'features').replace('t02_edgeon_a04_', 'edge_on').replace('t03_bar_a06_', 'bar').replace('t04_spiral_a08_', 'spiral')
+                    print(f"  {feature_name:12s}: {orig_mean:5.1f} → {filt_mean:5.1f} votes (+{improvement:4.1f}%)")
+        
+        # Update the catalog
+        original_count = len(self.sdss_catalog)
+        self.sdss_catalog = filtered_catalog.reset_index(drop=True)
+        
+        # If using weighted fractions, update feature names for downstream analysis
+        if use_weighted_fractions:
+            if verbose:
+                print(f"\n📊 Using weighted_fraction features (accounts for classifier reliability)")
+            
+            # Create mapping from regular fractions to weighted fractions
+            self.quality_feature_mapping = {}
+            for col in self.sdss_catalog.columns:
+                if col.endswith('_fraction') and not col.endswith('_weighted_fraction'):
+                    weighted_col = col.replace('_fraction', '_weighted_fraction')
+                    if weighted_col in self.sdss_catalog.columns:
+                        self.quality_feature_mapping[col] = weighted_col
+                        
+            if verbose:
+                print(f"   Mapped {len(self.quality_feature_mapping)} features to weighted versions")
+        
+        if verbose:
+            print(f"\n✅ Quality filtering complete:")
+            print(f"   Removed: {original_count - len(self.sdss_catalog):,} galaxies")
+            print(f"   Retained: {len(self.sdss_catalog):,} high-quality galaxies")
+            print(f"   Strategy: {strategy} ({threshold}+ classifications)")
+            if use_weighted_fractions:
+                print(f"   Using: weighted_fraction features for improved reliability")
+        
+        return self.sdss_catalog
+
     def analyze_morphology_consistency(self):
         """Compare morphological classifications for matched galaxies"""
         if not hasattr(self, 'matched_catalog'):
@@ -98,6 +232,9 @@ class SurveyOverlapAnalyzer:
             return
             
         print("Analyzing morphological consistency...")
+        
+        # Get UKIDSS OOD features for highlighting
+        ukidss_ood_features, key_9_ood_features = self.get_ukidss_ood_features()
         
         # Import feature mapping
         import sys
@@ -134,11 +271,71 @@ class SurveyOverlapAnalyzer:
         
         self.morphology_correlations = correlations
         
-        # Print results
+        # Print results with UKIDSS OOD features highlighted
         print(f"\nMorphological consistency for {len(correlations)} features:")
-        print("-" * 60)
+        print("=" * 80)
+        print("🎯 = UKIDSS OOD Feature | ⭐ = Key 9 OOD Features")
+        print("=" * 80)
+        
         for feature, stats in correlations.items():
-            print(f"{feature[:30]:30s} r={stats['correlation']:5.3f} (n={stats['n_samples']:4d})")
+            # Determine highlighting
+            markers = ""
+            if feature in ukidss_ood_features:
+                markers += "🎯"
+            if feature in key_9_ood_features:
+                markers += "⭐"
+            
+            marker_str = f"{markers:4s}" if markers else "    "
+            print(f"{marker_str}{feature[:40]:40s} r={stats['correlation']:5.3f} (n={stats['n_samples']:4d})")
+        
+        # Summary of UKIDSS OOD features
+        print(f"\n" + "=" * 80)
+        print("UKIDSS OUT-OF-DISTRIBUTION ANALYSIS FEATURES SUMMARY")
+        print("=" * 80)
+        
+        ood_correlations = {f: correlations[f] for f in correlations if f in ukidss_ood_features}
+        key_9_correlations = {f: correlations[f] for f in correlations if f in key_9_ood_features}
+        
+        if ood_correlations:
+            print(f"🎯 All UKIDSS OOD features ({len(ood_correlations)} found):")
+            mean_corr_all = np.mean([stats['correlation'] for stats in ood_correlations.values()])
+            print(f"   Mean correlation: {mean_corr_all:.3f}")
+            
+        if key_9_correlations:
+            print(f"⭐ Key 9 OOD features ({len(key_9_correlations)} found):")
+            mean_corr_key9 = np.mean([stats['correlation'] for stats in key_9_correlations.values()])
+            print(f"   Mean correlation: {mean_corr_key9:.3f}")
+            
+            print(f"\n📋 The 9 morphological features actually used for UKIDSS OOD comparison:")
+            print(f"    (These are the features common to both SDSS/Mixed models and UKIDSS)")
+            
+            # Create more readable feature names matching plot_final_comparison.py
+            feature_display_names = {
+                't01_smooth_or_features_a02_features_or_disk_fraction': 'Features/Disk',
+                't01_smooth_or_features_a01_smooth_fraction': 'Smooth',
+                't02_edgeon_a04_yes_fraction': 'Edge-on',
+                't04_spiral_a08_spiral_fraction': 'Spiral',
+                't02_edgeon_a05_no_fraction': 'Not Edge-on',
+                't03_bar_a06_bar_fraction': 'Bar',
+                't04_spiral_a09_no_spiral_fraction': 'No Spiral',
+                't01_smooth_or_features_a03_star_or_artifact_fraction': 'Star/Artifact',
+                't03_bar_a07_no_bar_fraction': 'No Bar'
+            }
+            
+            for i, feature in enumerate(key_9_ood_features, 1):
+                display_name = feature_display_names.get(feature, feature.replace('_fraction', ''))
+                if feature in correlations:
+                    corr = correlations[feature]['correlation']
+                    print(f"   {i:2d}. {display_name:15s} ({feature}) r={corr:5.3f}")
+                else:
+                    print(f"   {i:2d}. {display_name:15s} ({feature}) (not found in training data)")
+            
+            # Show excluded features
+            if hasattr(self, 'excluded_ood_features'):
+                print(f"\n❌ UKIDSS features excluded from comparison (not in model training):")
+                for feature in self.excluded_ood_features:
+                    print(f"    - {feature} (Odd features task)")
+                print(f"    These were excluded because the models don't predict odd features.")
             
         return correlations
         
@@ -391,6 +588,9 @@ class SurveyOverlapAnalyzer:
             
         print("Analyzing morphological consistency in training data...")
         
+        # Get UKIDSS OOD features for highlighting
+        ukidss_ood_features, key_9_ood_features = self.get_ukidss_ood_features()
+        
         # Import feature mapping
         import sys
         sys.path.append(str(Path(__file__).parent.parent))
@@ -426,11 +626,64 @@ class SurveyOverlapAnalyzer:
         
         self.training_morphology_correlations = correlations
         
-        # Print results
+        # Print results with UKIDSS OOD features highlighted
         print(f"\nMorphological consistency for {len(correlations)} features in training data:")
-        print("-" * 60)
+        print("=" * 80)
+        print("🎯 = UKIDSS OOD Feature | ⭐ = Key 9 OOD Features")
+        print("=" * 80)
+        
         for feature, stats in correlations.items():
-            print(f"{feature[:30]:30s} r={stats['correlation']:5.3f} (n={stats['n_samples']:4d})")
+            # Determine highlighting
+            markers = ""
+            if feature in ukidss_ood_features:
+                markers += "🎯"
+            if feature in key_9_ood_features:
+                markers += "⭐"
+            
+            marker_str = f"{markers:4s}" if markers else "    "
+            print(f"{marker_str}{feature[:40]:40s} r={stats['correlation']:5.3f} (n={stats['n_samples']:4d})")
+        
+        # Summary of UKIDSS OOD features in training data
+        print(f"\n" + "=" * 80)
+        print("UKIDSS OOD FEATURES IN TRAINING DATA SUMMARY")
+        print("=" * 80)
+        
+        ood_correlations = {f: correlations[f] for f in correlations if f in ukidss_ood_features}
+        key_9_correlations = {f: correlations[f] for f in correlations if f in key_9_ood_features}
+        
+        if ood_correlations:
+            print(f"🎯 UKIDSS OOD features in training overlap ({len(ood_correlations)} found):")
+            mean_corr_all = np.mean([stats['correlation'] for stats in ood_correlations.values()])
+            print(f"   Mean correlation: {mean_corr_all:.3f}")
+            
+        if key_9_correlations:
+            print(f"⭐ Key 9 OOD features in training overlap ({len(key_9_correlations)} found):")
+            mean_corr_key9 = np.mean([stats['correlation'] for stats in key_9_correlations.values()])
+            print(f"   Mean correlation: {mean_corr_key9:.3f}")
+            
+            print(f"\n🔍 Performance of the 9 OOD features in overlapping training galaxies:")
+            
+            # Use same display names as in the general analysis
+            feature_display_names = {
+                't01_smooth_or_features_a02_features_or_disk_fraction': 'Features/Disk',
+                't01_smooth_or_features_a01_smooth_fraction': 'Smooth',
+                't02_edgeon_a04_yes_fraction': 'Edge-on',
+                't04_spiral_a08_spiral_fraction': 'Spiral',
+                't02_edgeon_a05_no_fraction': 'Not Edge-on',
+                't03_bar_a06_bar_fraction': 'Bar',
+                't04_spiral_a09_no_spiral_fraction': 'No Spiral',
+                't01_smooth_or_features_a03_star_or_artifact_fraction': 'Star/Artifact',
+                't03_bar_a07_no_bar_fraction': 'No Bar'
+            }
+            
+            for i, feature in enumerate(key_9_ood_features, 1):
+                display_name = feature_display_names.get(feature, feature.replace('_fraction', ''))
+                if feature in correlations:
+                    corr = correlations[feature]['correlation']
+                    status = "✅ Good" if corr > 0.7 else "⚠️  Fair" if corr > 0.5 else "❌ Poor"
+                    print(f"   {i:2d}. {display_name:15s} r={corr:5.3f} {status}")
+                else:
+                    print(f"   {i:2d}. {display_name:15s} (not found in overlap)")
             
         return correlations
 
@@ -476,7 +729,7 @@ class SurveyOverlapAnalyzer:
         
         return report
 
-    def run_training_data_analysis(self, sdss_fraction=0.5, max_galaxies=None, random_seed=42, max_sep_arcsec=2.0, save_plots=True):
+    def run_training_data_analysis(self, sdss_fraction=0.5, max_galaxies=None, random_seed=42, max_sep_arcsec=2.0, save_plots=True, apply_quality_filter=False, quality_strategy='moderate'):
         """Run complete overlap analysis for actual training data"""
         print("=" * 80)
         print("SDSS-DECaLS Training Data Overlap Analysis")
@@ -485,6 +738,10 @@ class SurveyOverlapAnalyzer:
         # Load catalogs
         if not self.load_catalogs():
             return None
+            
+        # Apply quality filtering if requested
+        if apply_quality_filter:
+            self.apply_quality_filtering(strategy=quality_strategy, verbose=True)
             
         # Simulate mixed dataset sampling (exact same logic as training)
         self.simulate_mixed_dataset_sampling(sdss_fraction, max_galaxies, random_seed)
@@ -674,45 +931,91 @@ def main():
     """Run training data overlap analysis"""
     analyzer = SurveyOverlapAnalyzer()
     
-    # Analyze training data overlap using same parameters as mixed dataset
+    # Example 1: Standard analysis (no quality filtering)
+    print("🔍 RUNNING STANDARD ANALYSIS (no quality filtering)")
     report = analyzer.run_training_data_analysis(
         sdss_fraction=0.5,  # Same as mixed dataset default
         max_galaxies=None,  # Use all available
         random_seed=42,     # Same as mixed dataset default
         max_sep_arcsec=2.0,
-        save_plots=True
+        save_plots=True,
+        apply_quality_filter=False
     )
     
-    if report:
+    # Example 2: High-quality analysis (for comparison)
+    print("\n\n" + "🎯 RUNNING HIGH-QUALITY ANALYSIS (moderate quality filtering)")
+    analyzer_hq = SurveyOverlapAnalyzer()  # Fresh instance
+    report_hq = analyzer_hq.run_training_data_analysis(
+        sdss_fraction=0.5,
+        max_galaxies=None, 
+        random_seed=42,
+        max_sep_arcsec=2.0,
+        save_plots=False,  # Skip plots for second run
+        apply_quality_filter=True,
+        quality_strategy='moderate'  # 40+ classifications (73% of data)
+    )
+    
+    if report and report_hq:
+        print("\n" + "=" * 80)
+        print("QUALITY FILTERING COMPARISON")
+        print("=" * 80)
+        
+        # Compare morphological consistency between standard and high-quality datasets
+        if 'training_morphology_consistency' in report and 'training_morphology_consistency' in report_hq:
+            standard_corr = report['training_morphology_consistency']['mean_correlation']
+            hq_corr = report_hq['training_morphology_consistency']['mean_correlation']
+            improvement = (hq_corr - standard_corr) / standard_corr * 100
+            
+            print(f"📊 Morphological consistency comparison:")
+            print(f"   Standard dataset:     r = {standard_corr:.3f}")
+            print(f"   High-quality dataset: r = {hq_corr:.3f}")
+            print(f"   Improvement:          +{improvement:+5.1f}%")
+            
+            print(f"\n📈 Dataset size comparison:")
+            std_matches = report['training_data_summary']['matched_training_galaxies']
+            hq_matches = report_hq['training_data_summary']['matched_training_galaxies']
+            print(f"   Standard dataset matches:     {std_matches:,}")
+            print(f"   High-quality dataset matches: {hq_matches:,}")
+            print(f"   Match reduction:              {std_matches - hq_matches:,} ({(std_matches - hq_matches)/std_matches*100:.1f}%)")
+        
         print("\n" + "=" * 80)
         print("RECOMMENDATIONS FOR TRAINING")
         print("=" * 80)
         
         overlap_pct = report['training_implications']['overlap_percentage']
         
+        print("💡 Quality Filtering Recommendations:")
+        print("   • For PRODUCTION models: Use 'moderate' quality filtering (40+ classifications)")
+        print("     - Retains 73% of data with significantly improved label reliability")
+        print("     - Better morphological consistency in overlapping galaxies")
+        print("   • For EXPERIMENTS: Use 'conservative' quality filtering (50+ classifications)")
+        print("     - Highest label quality but only 10% of data remains")
+        print("   • For LARGE-SCALE training: Use weighted_fraction features")
+        print("     - No data loss but accounts for classifier reliability")
+        
         if overlap_pct < 5:
-            print("✅ LOW OVERLAP: Minimal impact on training diversity")
+            print("\n✅ LOW OVERLAP: Minimal impact on training diversity")
             print("   Recommendation: Include overlapping galaxies for transfer learning benefits")
             print("   The overlaps will help the model learn survey-invariant features.")
         elif overlap_pct < 15:
-            print("⚠️  MODERATE OVERLAP: Some impact on training diversity")
+            print("\n⚠️  MODERATE OVERLAP: Some impact on training diversity")
             print("   Recommendation: Include overlaps but ensure proper train/val splitting")
             print("   Consider stratified splitting to ensure overlaps don't leak between sets.")
         else:
-            print("🚨 HIGH OVERLAP: Significant impact on training diversity")
+            print("\n🚨 HIGH OVERLAP: Significant impact on training diversity")
             print("   Recommendation: Consider separate analysis of overlap vs non-overlap performance")
             print("   May want to deduplicate or carefully manage overlapping galaxies.")
             
         if 'training_morphology_consistency' in report:
             mean_corr = report['training_morphology_consistency']['mean_correlation']
             if mean_corr > 0.8:
-                print("✅ EXCELLENT consistency between surveys in training data")
+                print("\n✅ EXCELLENT consistency between surveys in training data")
                 print("   Overlapping galaxies show strong morphological agreement.")
             elif mean_corr > 0.6:
-                print("⚠️  GOOD consistency between surveys in training data")
+                print("\n⚠️  GOOD consistency between surveys in training data")
                 print("   Some morphological differences but generally consistent.")
             else:
-                print("🚨 POOR consistency between surveys in training data")
+                print("\n🚨 POOR consistency between surveys in training data")
                 print("   Investigate systematic differences - may indicate data quality issues.")
 
 
