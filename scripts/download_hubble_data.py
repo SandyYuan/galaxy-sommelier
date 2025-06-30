@@ -208,7 +208,7 @@ class HubbleImageDownloader:
 
     def download_cosmos_cutout(self, galaxy: GalaxyInfo) -> Optional[str]:
         """
-        Download COSMOS cutout using astroquery.mast, specifically targeting F814W filter
+        Download COSMOS cutout using astroquery.mast
         """
         if not ASTROQUERY_AVAILABLE:
             self.logger.warning(f"astroquery not available for {galaxy.zooniverse_id}")
@@ -220,8 +220,8 @@ class HubbleImageDownloader:
             # Create coordinate
             coord = SkyCoord(ra=galaxy.ra*u.deg, dec=galaxy.dec*u.deg)
             
-            # Query for HST observations at this location (larger radius to find F814W)
-            obs_table = Observations.query_region(coord, radius=60*u.arcsec)
+            # Query for HST observations at this location
+            obs_table = Observations.query_region(coord, radius=30*u.arcsec)
             
             # Filter for HST observations
             hst_obs = obs_table[obs_table['obs_collection'] == 'HST']
@@ -230,52 +230,26 @@ class HubbleImageDownloader:
                 self.logger.debug(f"No HST observations found for {galaxy.zooniverse_id}")
                 return None
             
-            # Look for F814W products specifically
-            f814w_product = None
-            fallback_product = None
+            # Get products for the first HST observation
+            products = Observations.get_product_list(hst_obs[0])
             
-            for obs in hst_obs:
-                products = Observations.get_product_list(obs)
-                
-                # Look for drizzled images (DRZ) 
-                drizzled_mask = products['productSubGroupDescription'] == 'DRZ'
-                drizzled_products = products[drizzled_mask]
-                
-                if len(drizzled_products) == 0:
-                    continue
-                
-                # Search for F814W filter
-                for product in drizzled_products:
-                    filename = product['productFilename'].upper()
-                    if 'F814W' in filename:
-                        f814w_product = product
-                        self.logger.debug(f"Found F814W product: {filename}")
-                        break
-                
-                # If we found F814W, use it
-                if f814w_product is not None:
-                    break
-                
-                # Keep a fallback product (first drizzled product)
-                if fallback_product is None:
-                    fallback_product = drizzled_products[0]
+            # Look for drizzled images (DRZ) - these are the best processed products
+            product_types = np.array(products['productSubGroupDescription'])
+            drizzled_mask = product_types == 'DRZ'
+            drizzled_products = products[drizzled_mask]
             
-            # Use F814W if found, otherwise fallback
-            selected_product = f814w_product if f814w_product is not None else fallback_product
-            
-            if selected_product is None:
-                self.logger.debug(f"No suitable products found for {galaxy.zooniverse_id}")
+            if len(drizzled_products) == 0:
+                self.logger.debug(f"No drizzled products found for {galaxy.zooniverse_id}")
                 return None
             
-            filter_used = "F814W" if f814w_product is not None else "OTHER"
-            self.logger.debug(f"Using {filter_used} product: {selected_product['productFilename']} for {galaxy.zooniverse_id}")
-            
-            # Download the selected product to temp directory
+            # Download the first drizzled product to temp directory
             temp_dir = self.output_dir / 'temp'
             temp_dir.mkdir(exist_ok=True)
             
+            self.logger.debug(f"Downloading {drizzled_products[0]['productFilename']} for {galaxy.zooniverse_id}")
+            
             download_result = Observations.download_products(
-                [selected_product],
+                drizzled_products[0:1],
                 download_dir=str(temp_dir)
             )
             
@@ -286,7 +260,7 @@ class HubbleImageDownloader:
             # Extract cutout from the large drizzled image
             downloaded_file = download_result['Local Path'][0]
             cutout_path = self._extract_cutout_from_drizzled_image(
-                downloaded_file, galaxy, filter_used
+                downloaded_file, galaxy
             )
             
             # Clean up the large file
@@ -309,7 +283,7 @@ class HubbleImageDownloader:
             self.logger.warning(f"astroquery download failed for {galaxy.zooniverse_id}: {e}")
             return None
 
-    def _extract_cutout_from_drizzled_image(self, image_path: str, galaxy: GalaxyInfo, filter_used: str) -> Optional[str]:
+    def _extract_cutout_from_drizzled_image(self, image_path: str, galaxy: GalaxyInfo) -> Optional[str]:
         """
         Extract a cutout from a large HST drizzled image
         """
@@ -377,10 +351,9 @@ class HubbleImageDownloader:
                 cutout_header['ORIG_DEC'] = galaxy.dec
                 cutout_header['CUTOUT_X'] = x_center
                 cutout_header['CUTOUT_Y'] = y_center
-                cutout_header['FILTER_USED'] = filter_used
                 
-                # Save cutout with filter info
-                filename = f"cosmos_{galaxy.zooniverse_id}_{filter_used}.fits"
+                # Save cutout
+                filename = f"cosmos_{galaxy.zooniverse_id}.fits"
                 output_path = self.output_dir / 'images' / filename
                 
                 fits.writeto(output_path, cutout_data, cutout_header, overwrite=True)
@@ -394,7 +367,7 @@ class HubbleImageDownloader:
 
     def _create_png_from_fits(self, fits_path: str, galaxy: GalaxyInfo) -> Optional[str]:
         """
-        Create a PNG image from a FITS file for visualization (optimized for F814W black and white)
+        Create a PNG image from a FITS file for visualization
         """
         if not self.save_png or not PNG_AVAILABLE:
             return None
@@ -403,61 +376,41 @@ class HubbleImageDownloader:
             # Read FITS data
             with fits.open(fits_path) as hdul:
                 data = hdul[0].data
-                header = hdul[0].header
                 
             if data is None:
                 return None
             
-            # Get filter information
-            filter_used = header.get('FILTER_USED', 'UNKNOWN')
-            
             # Handle NaN values
             data = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
             
-            # Enhanced normalization for galaxy visibility
-            # Use sigma clipping to better handle background vs galaxy signal
-            from scipy import ndimage
-            
-            # Estimate background level
-            background = np.percentile(data, 10)  # Conservative background estimate
-            
-            # Subtract background
-            data_bg_sub = data - background
-            
-            # Use more aggressive percentile clipping for better galaxy contrast
-            vmin = np.percentile(data_bg_sub, 0.5)  # Darker background
-            vmax = np.percentile(data_bg_sub, 99.5)  # Preserve bright features
+            # Normalize data for visualization
+            # Use percentile clipping to handle outliers
+            vmin = np.percentile(data, 1)
+            vmax = np.percentile(data, 99)
             
             # Clip and normalize to 0-1 range
-            data_normalized = np.clip((data_bg_sub - vmin) / (vmax - vmin), 0, 1)
+            data_normalized = np.clip((data - vmin) / (vmax - vmin), 0, 1)
             
-            # Apply gamma correction optimized for galaxy structure
-            gamma = 0.8  # Better for F814W galaxy morphology
+            # Apply gamma correction for better visibility
+            gamma = 0.5  # Makes faint features more visible
             data_gamma = np.power(data_normalized, gamma)
             
-            # Apply slight Gaussian smoothing to reduce noise
-            data_smooth = ndimage.gaussian_filter(data_gamma, sigma=0.5)
-            
             # Convert to 8-bit
-            data_8bit = (data_smooth * 255).astype(np.uint8)
+            data_8bit = (data_gamma * 255).astype(np.uint8)
             
-            # Create PNG filename with filter info
-            png_filename = f"cosmos_{galaxy.zooniverse_id}_{filter_used}.png"
+            # Create PNG filename
+            png_filename = f"cosmos_{galaxy.zooniverse_id}.png"
             png_path = self.output_dir / 'images' / png_filename
             
-            # Save high-quality black and white image
-            plt.figure(figsize=(10, 10))
-            plt.imshow(data_8bit, cmap='gray', origin='lower', vmin=0, vmax=255)
-            plt.title(f'{galaxy.zooniverse_id} ({filter_used} filter)\\nRA={galaxy.ra:.4f}, Dec={galaxy.dec:.4f}')
+            # Save using matplotlib for high quality
+            plt.figure(figsize=(8, 8))
+            plt.imshow(data_8bit, cmap='gray', origin='lower')
+            plt.title(f'{galaxy.zooniverse_id} (RA={galaxy.ra:.4f}, Dec={galaxy.dec:.4f})')
             plt.xlabel('Pixels')
             plt.ylabel('Pixels')
-            
-            # Add a subtle colorbar
-            cbar = plt.colorbar(label='Intensity', shrink=0.8)
-            cbar.ax.tick_params(labelsize=10)
-            
+            plt.colorbar(label='Normalized Intensity')
             plt.tight_layout()
-            plt.savefig(png_path, dpi=200, bbox_inches='tight', facecolor='white')
+            plt.savefig(png_path, dpi=150, bbox_inches='tight')
             plt.close()
             
             self.logger.debug(f"Saved PNG: {png_filename}")
@@ -468,9 +421,9 @@ class HubbleImageDownloader:
             return None
 
     def download_galaxy(self, galaxy: GalaxyInfo) -> bool:
-        """Download image for a single COSMOS galaxy (targeting F814W filter)"""
-        # Check if already downloaded (any filter)
-        existing_files = list((self.output_dir / 'images').glob(f"cosmos_{galaxy.zooniverse_id}_*.fits"))
+        """Download image for a single COSMOS galaxy"""
+        # Check if already downloaded
+        existing_files = list((self.output_dir / 'images').glob(f"cosmos_{galaxy.zooniverse_id}.*"))
         if existing_files:
             self.stats['skipped'] += 1
             return True
