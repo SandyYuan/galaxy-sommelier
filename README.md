@@ -46,6 +46,8 @@ We tested the model's generalization capabilities by evaluating on **UKIDSS** da
 
 ### Cross-Survey Performance Results
 
+The values represents averages over the 11 features that are shared between SDSS and UKIDSS datasets. 
+
 | **Metric** | **SDSS (In-Distribution)** | **UKIDSS (Out-of-Distribution)** | **Degradation** |
 |------------|----------------------------|-----------------------------------|-----------------|
 | **Overall Correlation** | 0.893 | 0.839 | **-6.0%** |
