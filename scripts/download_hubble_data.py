@@ -125,6 +125,7 @@ class HubbleImageDownloader:
             'success': 0,
             'failed': 0,
             'skipped': 0,
+            'converted': 0,  # FITS to PNG conversions
             'methods_used': {
                 'hapcut': 0,
                 'mast_query': 0,
@@ -442,51 +443,70 @@ class HubbleImageDownloader:
 
     def download_galaxy(self, galaxy: GalaxyInfo) -> bool:
         """Download image for a single COSMOS galaxy"""
-        # Check if already downloaded
-        existing_files = list((self.output_dir / 'images').glob(f"cosmos_{galaxy.zooniverse_id}.*"))
-        if existing_files:
+        fits_file = self.output_dir / 'images' / f"cosmos_{galaxy.zooniverse_id}.fits"
+        png_file = self.output_dir / 'images' / f"cosmos_{galaxy.zooniverse_id}.png"
+        
+        fits_exists = fits_file.exists()
+        png_exists = png_file.exists()
+        
+        # Determine what action to take based on file existence and PNG request
+        if fits_exists and png_exists:
+            # Both files exist - skip completely
             self.stats['skipped'] += 1
             return True
-        
-        # Try to download
-        result = self.download_cosmos_cutout(galaxy)
-        
-        if result:
-            # Create PNG version if requested
-            png_path = None
-            if self.save_png:
-                png_path = self._create_png_from_fits(result, galaxy)
-            
-            # Save metadata
-            metadata = {
-                'zooniverse_id': galaxy.zooniverse_id,
-                'survey_id': galaxy.survey_id,
-                'ra': galaxy.ra,
-                'dec': galaxy.dec,
-                'imaging': galaxy.imaging,
-                'z_best': galaxy.z_best,
-                'mag_best': galaxy.mag_best,
-                'file_path': result
-            }
-            
-            # Add PNG path to metadata if available
+        elif fits_exists and not png_exists and self.save_png:
+            # FITS exists but PNG doesn't and PNG requested - convert only
+            png_path = self._create_png_from_fits(str(fits_file), galaxy)
             if png_path:
-                metadata['png_path'] = png_path
-            
-            metadata_file = self.output_dir / 'metadata' / f"{galaxy.zooniverse_id}.json"
-            import json
-            with open(metadata_file, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            
-            self.stats['success'] += 1
+                self.stats['converted'] += 1
+                self.logger.debug(f"Converted FITS to PNG for {galaxy.zooniverse_id}")
             return True
-        else:
-            # Save to failed list
-            with open(self.output_dir / 'failed' / 'failed_downloads.txt', 'a') as f:
-                f.write(f"{galaxy.zooniverse_id},{galaxy.ra},{galaxy.dec},{galaxy.imaging}\n")
+        elif fits_exists and not self.save_png:
+            # FITS exists and PNG not requested - skip
+            self.stats['skipped'] += 1
+            return True
+        elif not fits_exists:
+            # FITS doesn't exist - need to download
+            result = self.download_cosmos_cutout(galaxy)
             
-            self.stats['failed'] += 1
-            return False
+            if result:
+                # Create PNG version if requested
+                png_path = None
+                if self.save_png:
+                    png_path = self._create_png_from_fits(result, galaxy)
+                
+                # Save metadata
+                metadata = {
+                    'zooniverse_id': galaxy.zooniverse_id,
+                    'survey_id': galaxy.survey_id,
+                    'ra': galaxy.ra,
+                    'dec': galaxy.dec,
+                    'imaging': galaxy.imaging,
+                    'z_best': galaxy.z_best,
+                    'mag_best': galaxy.mag_best,
+                    'file_path': result
+                }
+                
+                # Add PNG path to metadata if available
+                if png_path:
+                    metadata['png_path'] = png_path
+                
+                metadata_file = self.output_dir / 'metadata' / f"{galaxy.zooniverse_id}.json"
+                import json
+                with open(metadata_file, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+                
+                self.stats['success'] += 1
+                return True
+            else:
+                # Save to failed list
+                with open(self.output_dir / 'failed' / 'failed_downloads.txt', 'a') as f:
+                    f.write(f"{galaxy.zooniverse_id},{galaxy.ra},{galaxy.dec},{galaxy.imaging}\n")
+                
+                self.stats['failed'] += 1
+                return False
+        
+        return True
 
     def download_batch(self, galaxies: List[GalaxyInfo], parallel_jobs: int = 4) -> None:
         """Download images for a batch of galaxies"""
@@ -500,7 +520,7 @@ class HubbleImageDownloader:
             for galaxy in galaxies:
                 self.download_galaxy(galaxy)
                 progress_bar.update(1)
-                time.sleep(0.1)  # Be nice to the server
+                # Removed artificial delay for faster downloads
         else:
             # Parallel download with rate limiting
             with ThreadPoolExecutor(max_workers=parallel_jobs) as executor:
@@ -512,7 +532,7 @@ class HubbleImageDownloader:
                 for future in as_completed(future_to_galaxy):
                     future.result()
                     progress_bar.update(1)
-                    time.sleep(0.05)  # Small delay between requests
+                    # Removed artificial delay for faster downloads
         
         progress_bar.close()
         self.print_statistics()
@@ -524,11 +544,12 @@ class HubbleImageDownloader:
         print("="*50)
         print(f"Total COSMOS galaxies: {self.stats['total']}")
         print(f"Successfully downloaded: {self.stats['success']}")
+        print(f"FITS->PNG conversions: {self.stats['converted']}")
         print(f"Already existed (skipped): {self.stats['skipped']}")
         print(f"Failed downloads: {self.stats['failed']}")
         
         if self.stats['total'] > 0:
-            success_rate = (self.stats['success'] + self.stats['skipped']) / self.stats['total'] * 100
+            success_rate = (self.stats['success'] + self.stats['skipped'] + self.stats['converted']) / self.stats['total'] * 100
             print(f"Success rate: {success_rate:.1f}%")
         
         print(f"\nImages saved to: {self.output_dir / 'images'}")
@@ -544,11 +565,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Download sample of 100 COSMOS galaxies
+    # Download sample of 100 COSMOS galaxies (FITS only)
     python download_hubble_data.py --sample-size 100
     
-    # Download all COSMOS galaxies with 2 parallel jobs
-    python download_hubble_data.py --full-catalog --parallel-jobs 2
+    # Download with PNG generation
+    python download_hubble_data.py --sample-size 100 --save-png
+    
+    # Convert existing FITS files to PNG (no re-download)
+    python download_hubble_data.py --sample-size 100 --save-png
+    
+    # Download all COSMOS galaxies with 8 parallel jobs
+    python download_hubble_data.py --full-catalog --parallel-jobs 8
         """
     )
     
@@ -579,8 +606,8 @@ Examples:
     parser.add_argument(
         '--parallel-jobs',
         type=int,
-        default=2,
-        help='Number of parallel download jobs (default: 2, be nice to servers)'
+        default=8,
+        help='Number of parallel download jobs (default: 8)'
     )
     
     parser.add_argument(
