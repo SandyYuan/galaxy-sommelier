@@ -10,7 +10,60 @@ Build a state-of-the-art galaxy morphology classifier using DINOv2 fine-tuning t
 **Data Storage**: `/pscratch/sd/s/sihany/galaxy-sommelier-data/`
 
 ---
-## LATEST UPDATE: Phase 2 Complete ✅ (OOD Generalization Study)
+## LATEST UPDATE: Phase 3 Development 🚧 (Triple Mixed Dataset & Feature Standardization)
+
+### Triple Mixed Dataset Development
+- **Objective**: Expand training to include HST data alongside SDSS+DECaLS for improved morphological diversity.
+- **Implementation**: Created `TripleMixedDataset` class supporting three-way survey mixing (33% SDSS, 33% DECaLS, 34% HST).
+- **Key Files**:
+  - `scripts/triple_mixed_dataset.py`: New dataset class with standardized feature extraction
+  - `scripts/run_triple_mixed_training.sh`: Two-stage training pipeline (head → full fine-tuning)
+  - `configs/triple_mixed_head_training_config.yaml` & `triple_mixed_full_finetuning_config.yaml`: Training configurations
+
+### 26-Feature Standardization Project ✅
+- **Problem Identified**: Models trained on different feature sets (SDSS: 74, Mixed: 52, Triple: 14) making comparisons scientifically invalid.
+- **Solution**: Comprehensive feature mapping across all 4 surveys (SDSS, DECaLS, HST, UKIDSS) identifying 26 overlapping morphological features.
+- **Implementation**:
+  - `four_survey_feature_mapping.csv`: Complete cross-survey feature mapping
+  - `standard_26_features.py`: Standardized feature definitions and column mappings
+  - Updated ALL model configurations to use exactly 26 features in identical order
+- **Impact**: Ensures fair scientific comparison across all model variants
+
+### Configuration Standardization ✅
+Updated all training configurations for 26-feature consistency:
+- **SDSS-only models**: `head_training_config.yaml`, `full_finetuning_config.yaml`, `continued_finetuning_config.yaml`
+- **Mixed SDSS+DECaLS**: `mixed_head_training_config.yaml`, `mixed_full_finetuning_config.yaml`
+- **Max overlap variants**: `max_overlap_head_training_config.yaml`, `max_overlap_full_finetuning_config.yaml`, `max_overlap_improved_config.yaml`
+- **High quality variants**: `mixed_high_quality_head_training_config.yaml`, `mixed_high_quality_config.yaml`
+- **Triple mixed**: `triple_mixed_head_training_config.yaml`, `triple_mixed_full_finetuning_config.yaml`
+
+### Lessons Learned: Dataset Sizing Principles
+- **Issue**: Initially used arbitrary dataset size (150k galaxies) without scientific justification
+- **Principle**: Dataset sizes should be data-driven and consistent with previous experiments
+- **Correct Approach**: Use `min(available_catalogs) * N` methodology for principled, reproducible sizing
+- **Fair Comparison**: All models should train on comparable dataset sizes for valid scientific conclusions
+
+### Technical Improvements
+- **Verified Loss Calculation**: Confirmed all models compute loss on exactly 26 features (26 predictions vs 26 targets)
+- **Feature Extraction Pipeline**: Standardized feature extraction ensuring consistent output order across all surveys
+- **Error Handling**: Robust catalog validation and missing feature detection
+- **Memory Management**: Identified GPU memory constraints requiring principled dataset sizing
+
+### Current Status
+- ✅ All configurations updated to 26-feature standard
+- ✅ Triple mixed dataset implemented with standardized features
+- ✅ Feature mapping validated across all 4 surveys
+- 🚧 Need to fix dataset sizing using principled approach
+- 🚧 Ready to begin fair comparison training across all model variants
+
+### Next Steps
+1. **Fix Dataset Sizing**: Update configs with data-driven sizing approach
+2. **Comparative Training**: Train all models on standardized 26 features
+3. **Comprehensive Benchmarking**: Fair comparison across all model variants
+4. **Cross-Survey Evaluation**: Test generalization on UKIDSS with consistent feature set
+
+---
+## PREVIOUS UPDATE: Phase 2 Complete ✅ (OOD Generalization Study)
 - **Objective**: Tested if training on diverse data (SDSS+DECaLS) improves generalization on an unseen survey (UKIDSS).
 - **Outcome**: **Success**. The mixed-survey model significantly outperformed the SDSS-only model (0.857 vs 0.819 correlation), confirming the hypothesis.
 - **Additional Test**: Evaluated if high-quality SDSS data (higher classification counts) improves OOD performance. The high-quality mixed model achieved 0.855 correlation vs 0.857 for the original mixed model, showing minimal difference.

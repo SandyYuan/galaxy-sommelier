@@ -38,8 +38,7 @@ class TripleMixedDataset(Dataset):
     
     def __init__(self, sdss_catalog_path, decals_catalog_path, hst_catalog_path,
                  sdss_image_dir, decals_image_dir, hst_image_dir,
-                 survey_fractions={'sdss': 0.33, 'decals': 0.33, 'hst': 0.34},
-                 max_galaxies=150000, transform=None, split='train', 
+                 transform=None, split='train', 
                  train_ratio=0.8, val_ratio=0.1, random_seed=42):
         
         self.transform = transform
@@ -52,9 +51,12 @@ class TripleMixedDataset(Dataset):
         self.hst_feature_columns = get_survey_columns('hst')
         
         print(f"Initializing TripleMixedDataset with standardized 26 features...")
-        print(f"Survey fractions: {survey_fractions}")
-        print(f"Max galaxies: {max_galaxies}")
-        print(f"Feature mapping: {len(FEATURE_NAMES)} features in standard order")
+        print(f"Using same SDSS+DECaLS selection as mixed dataset + ALL available HST images")
+        print(f"Feature mapping: 26 features in standard order")
+        
+        # Set parameters
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
         
         # Load catalogs
         self.load_catalogs(sdss_catalog_path, decals_catalog_path, hst_catalog_path)
@@ -64,8 +66,8 @@ class TripleMixedDataset(Dataset):
         self.decals_image_dir = Path(decals_image_dir)
         self.hst_image_dir = Path(hst_image_dir)
         
-        # Create mixed dataset
-        self.create_mixed_dataset(survey_fractions, max_galaxies)
+        # Create mixed dataset using same logic as mixed_dataset.py
+        self.create_mixed_dataset()
         
         # Split dataset
         self.split_dataset(train_ratio, val_ratio)
@@ -112,35 +114,41 @@ class TripleMixedDataset(Dataset):
             raise ValueError(f"Missing HST features: {missing_hst}")
         print(f"  ✅ All 26 HST features verified")
     
-    def create_mixed_dataset(self, survey_fractions, max_galaxies):
-        """Create mixed dataset with specified survey fractions."""
+    def create_mixed_dataset(self):
+        """Create mixed dataset using same logic as mixed_dataset.py."""
         
-        # Calculate sample sizes
-        sdss_size = int(max_galaxies * survey_fractions['sdss'])
-        decals_size = int(max_galaxies * survey_fractions['decals'])
-        hst_size = int(max_galaxies * survey_fractions['hst'])
+        # Use same logic as mixed_dataset.py: min(available_catalogs) * 2 for SDSS+DECaLS
+        mixed_base_size = min(len(self.sdss_catalog), len(self.decals_catalog)) * 2
         
-        print(f"Target sample sizes:")
+        # Split evenly between SDSS and DECaLS (50/50 like mixed dataset)
+        sdss_size = mixed_base_size // 2
+        decals_size = mixed_base_size // 2
+        
+        # HST uses ALL available images
+        hst_size = len(self.hst_catalog)
+        
+        total_size = sdss_size + decals_size + hst_size
+        
+        print(f"Target sample sizes (following mixed_dataset.py logic):")
+        print(f"  Mixed base: min({len(self.sdss_catalog)}, {len(self.decals_catalog)}) * 2 = {mixed_base_size}")
         print(f"  SDSS: {sdss_size}")
         print(f"  DECaLS: {decals_size}")
-        print(f"  HST: {hst_size}")
+        print(f"  HST: {hst_size} (ALL available)")
+        print(f"  Total: {total_size}")
         
         # Sample from each catalog
         np.random.seed(self.random_seed)
         
         # SDSS sampling
-        sdss_sample_size = min(sdss_size, len(self.sdss_catalog))
-        sdss_indices = np.random.choice(len(self.sdss_catalog), sdss_sample_size, replace=False)
+        sdss_indices = np.random.choice(len(self.sdss_catalog), sdss_size, replace=False)
         sdss_sample = self.sdss_catalog.iloc[sdss_indices].reset_index(drop=True)
         
         # DECaLS sampling
-        decals_sample_size = min(decals_size, len(self.decals_catalog))
-        decals_indices = np.random.choice(len(self.decals_catalog), decals_sample_size, replace=False)
+        decals_indices = np.random.choice(len(self.decals_catalog), decals_size, replace=False)
         decals_sample = self.decals_catalog.iloc[decals_indices].reset_index(drop=True)
         
         # HST sampling
-        hst_sample_size = min(hst_size, len(self.hst_catalog))
-        hst_indices = np.random.choice(len(self.hst_catalog), hst_sample_size, replace=False)
+        hst_indices = np.random.choice(len(self.hst_catalog), hst_size, replace=False)
         hst_sample = self.hst_catalog.iloc[hst_indices].reset_index(drop=True)
         
         print(f"Actual sample sizes:")
@@ -329,11 +337,13 @@ class TripleMixedDataset(Dataset):
         # Get features (already in standardized order)
         features = sample['features']
         
+        # Return only tensor-compatible fields to avoid collation errors
+        # Note: Removing string fields (survey, objid) to avoid DataLoader collate issues
+        # Could add these back with a custom collate function if needed
         return {
             'image': image,
             'labels': torch.tensor(features, dtype=torch.float32),
-            'survey': sample['survey'],
-            'objid': sample['objid']
+            'weight': torch.tensor(1.0, dtype=torch.float32)  # Default weight
         }
 
 def get_triple_mixed_data_loaders(config, transforms_dict):
@@ -341,7 +351,8 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     Create data loaders for triple mixed dataset.
     
     Returns train, validation, and test loaders using standardized
-    26-feature mapping.
+    26-feature mapping and same SDSS+DECaLS selection as mixed_dataset.py
+    plus ALL available HST images.
     """
     from torch.utils.data import DataLoader
     
@@ -354,11 +365,6 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     decals_images = config['data']['decals_dir']
     hst_images = config['data']['hst_dir']
     
-    # Get dataset parameters
-    mixed_config = config['mixed_data']
-    survey_fractions = mixed_config['survey_fractions']
-    max_galaxies = mixed_config['max_galaxies']
-    
     batch_size = config['training']['batch_size']
     num_workers = config.get('num_workers', 4)
     
@@ -368,8 +374,6 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     train_dataset = TripleMixedDataset(
         sdss_catalog, decals_catalog, hst_catalog,
         sdss_images, decals_images, hst_images,
-        survey_fractions=survey_fractions,
-        max_galaxies=max_galaxies,
         transform=transforms_dict['train'],
         split='train'
     )
@@ -377,8 +381,6 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     val_dataset = TripleMixedDataset(
         sdss_catalog, decals_catalog, hst_catalog,
         sdss_images, decals_images, hst_images,
-        survey_fractions=survey_fractions,
-        max_galaxies=max_galaxies,
         transform=transforms_dict['val'],
         split='val'
     )
@@ -386,8 +388,6 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     test_dataset = TripleMixedDataset(
         sdss_catalog, decals_catalog, hst_catalog,
         sdss_images, decals_images, hst_images,
-        survey_fractions=survey_fractions,
-        max_galaxies=max_galaxies,
         transform=transforms_dict['test'],
         split='test'
     )

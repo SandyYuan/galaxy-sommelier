@@ -22,14 +22,8 @@ mixed_data:
   dataset_name: "TripleMixedDataset"
   feature_set: "standard_26"  # Use standardized 26-feature mapping
   
-  # Survey fractions for 3-way split
-  survey_fractions:
-    sdss: 0.33
-    decals: 0.33  
-    hst: 0.34
-  
-  # Dataset sizes
-  max_galaxies: 150000  # ~50k from each survey
+  # Dataset sizing: Use same SDSS+DECaLS selection as mixed_dataset.py + ALL HST
+  # HST will use all available images (~113k)
 
 # Model configuration - STANDARDIZED to 26 outputs
 model:
