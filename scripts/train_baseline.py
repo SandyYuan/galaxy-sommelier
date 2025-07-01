@@ -199,114 +199,64 @@ class GalaxyTrainer:
                     train_dataset, [num_train, num_val],
                     generator=torch.Generator().manual_seed(42)
                 )
-
-                # Use the same transformations for the validation split
-                self.val_dataset.dataset.transform = self.val_transform
                 
-            elif dataset_name == "TripleMixedDataset":
-                from scripts.triple_mixed_dataset import TripleMixedDataset
-                
-                # Get paths from config
-                sdss_cat_path = self.config['data']['sdss_catalog_path']
-                decals_cat_path = self.config['data']['decals_catalog_path']
-                hst_cat_path = self.config['data']['hst_catalog_path']
-                
-                # Create dataset
-                full_dataset = TripleMixedDataset(
-                    sdss_catalog_path=sdss_cat_path,
-                    decals_catalog_path=decals_cat_path,
-                    hst_catalog_path=hst_cat_path,
-                    sdss_image_dir=self.config['data']['sdss_dir'],
-                    decals_image_dir=self.config['data']['decals_dir'],
-                    hst_image_dir=self.config['data']['hst_dir'],
-                    survey_fractions=mixed_config.get('survey_fractions', {'sdss': 0.33, 'decals': 0.33, 'hst': 0.34}),
-                    max_galaxies=mixed_config.get('max_galaxies', 150000),
-                    transform=None,  # Will be set per split
-                    feature_set=mixed_config.get('feature_set', 'sdss'),
-                    random_seed=42
-                )
-                
-                # Split dataset
-                train_size = int(0.8 * len(full_dataset))
-                val_size = int(0.1 * len(full_dataset))
-                test_size = len(full_dataset) - train_size - val_size
-                
-                self.train_dataset, self.val_dataset, test_dataset = torch.utils.data.random_split(
-                    full_dataset, [train_size, val_size, test_size],
-                    generator=torch.Generator().manual_seed(42)
-                )
-                
-                # Set transforms for each split
+                # Set transforms after split
                 self.train_dataset.dataset.transform = self.train_transform
                 self.val_dataset.dataset.transform = self.val_transform
                 
-                logger.info(f"Triple mixed dataset: {len(full_dataset)} total galaxies")
-                logger.info(f"Train: {len(self.train_dataset)}, Val: {len(self.val_dataset)}, Test: {len(test_dataset)}")
+                # Create data loaders
+                batch_size = self.config['training']['batch_size']
+                self.train_loader = torch.utils.data.DataLoader(
+                    self.train_dataset, batch_size=batch_size, shuffle=True,
+                    num_workers=self.config.get('num_workers', 4),
+                    pin_memory=True
+                )
+                self.val_loader = torch.utils.data.DataLoader(
+                    self.val_dataset, batch_size=batch_size, shuffle=False,
+                    num_workers=self.config.get('num_workers', 4),
+                    pin_memory=True
+                )
                 
-            else: # Original mixed dataset logic
+            elif dataset_name == "TripleMixedDataset":
+                from triple_mixed_dataset import get_triple_mixed_data_loaders
+                
+                logger.info("Using TripleMixedDataset with standardized 26 features")
+                
+                # Create transforms dict
+                transforms_dict = {
+                    'train': self.train_transform,
+                    'val': self.val_transform,
+                    'test': self.val_transform
+                }
+                
+                # Create data loaders using the standardized approach
+                self.train_loader, self.val_loader, self.test_loader = get_triple_mixed_data_loaders(
+                    self.config, transforms_dict
+                )
+                
+                logger.info("TripleMixedDataset data loaders created successfully")
+                
+            else:
                 from mixed_dataset import create_mixed_data_loaders
                 
-                sdss_fraction = mixed_config.get('sdss_fraction', 0.5)
-                high_quality = mixed_config.get('high_quality', False)
-                logger.info(f"SDSS fraction: {sdss_fraction:.1%}")
-                if high_quality:
-                    logger.info("Using high-quality SDSS galaxy selection (highest classification counts)")
+                transforms_dict = {
+                    'train': self.train_transform,
+                    'val': self.val_transform,
+                    'test': self.val_transform
+                }
                 
+                # Use the standard mixed dataset (SDSS + DECaLS)
                 self.train_loader, self.val_loader, self.test_loader = create_mixed_data_loaders(
-                    self.config_path, 
-                    sdss_fraction=sdss_fraction,
-                    sample_size=self.sample_size,
-                    high_quality=high_quality
+                    self.config, transforms_dict, sample_size=self.sample_size
                 )
-                # The rest is handled inside create_mixed_data_loaders, so we can return
-                return
-
         else:
-            logger.info("Using standard SDSS dataset")
+            # Use standard Galaxy Zoo dataset
             self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
-                self.config_path, 
-                sample_size=self.sample_size
+                self.config_path, sample_size=self.sample_size
             )
-            return
-
-        # Create DataLoaders from the datasets created above (for MaxOverlap path)
-        self.train_loader = torch.utils.data.DataLoader(
-            self.train_dataset,
-            batch_size=self.config['training']['batch_size'],
-            shuffle=True,
-            num_workers=self.config.get('num_workers', 4),
-            pin_memory=self.config.get('pin_memory', True)
-        )
-        self.val_loader = torch.utils.data.DataLoader(
-            self.val_dataset,
-            batch_size=self.config['training']['batch_size'],
-            shuffle=False,
-            num_workers=self.config.get('num_workers', 4),
-            pin_memory=self.config.get('pin_memory', True)
-        )
-        self.test_loader = None # No separate test set in this flow
-
-        logger.info(f"Train batches: {len(self.train_loader)}")
-        logger.info(f"Validation batches: {len(self.val_loader)}")
         
-        # Log data info
-        wandb_data = {
-            'train_batches': len(self.train_loader),
-            'val_batches': len(self.val_loader),
-            'sample_size': self.sample_size or 'full'
-        }
-        
-        if use_mixed:
-            wandb_data.update({
-                'dataset_type': 'mixed_sdss_decals',
-                'sdss_fraction': mixed_config.get('sdss_fraction', 0.5),
-                'high_quality_sdss': mixed_config.get('high_quality', False)
-            })
-        else:
-            wandb_data['dataset_type'] = 'sdss_only'
-            
-        if self.use_wandb:
-            self.wandb.log(wandb_data)
+        logger.info(f"Data loaders created - Train: {len(self.train_loader)} batches, "
+                   f"Val: {len(self.val_loader)} batches")
     
     def setup_optimizer(self):
         """Setup optimizer and learning rate scheduler with differential learning rates"""

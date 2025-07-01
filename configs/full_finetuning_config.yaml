@@ -11,10 +11,10 @@ data:
   catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
   catalog_name: "gz2_master_catalog_corrected.csv"
 
-# Model configuration
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 74  # Galaxy Zoo 2 vote fractions (all fraction columns)
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
   freeze_backbone: false  # UNFREEZE backbone for full fine-tuning
 
@@ -51,6 +51,12 @@ augmentation:
   gaussian_blur: true  # Add blur augmentation
   gaussian_noise: true  # Add noise augmentation
 
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
+
 # Galaxy Zoo tasks
 galaxy_zoo_tasks:
   t01:
@@ -74,7 +80,7 @@ wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 50  # Log more frequently
-  tags: ["full_finetuning", "end_to_end", "unfrozen_backbone"]
+  tags: ["full_finetuning", "end_to_end", "unfrozen_backbone", "sdss_only", "26_standardized_features"]
 
 # Hardware
 device: "cuda"

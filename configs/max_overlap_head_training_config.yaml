@@ -1,4 +1,4 @@
-# Galaxy Sommelier Max Overlap Head Training Configuration
+# Galaxy Sommelier Max Overlap Head Training Configuration - STANDARDIZED to 26 features
 
 # Data paths
 data:
@@ -10,16 +10,16 @@ data:
   sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/sdss_max_overlap_training_catalog.csv"
   decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/decals_max_overlap_training_catalog.csv"
 
-# Max Overlap dataset configuration
+# Max Overlap dataset configuration - STANDARDIZED to 26 features
 mixed_data:
   use_mixed_dataset: true
   dataset_name: "MaxOverlapDataset" # Tells train script to use our new loader
-  feature_set: "sdss"
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
 
-# Model configuration
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 52 
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
   freeze_backbone: true
 
@@ -44,12 +44,18 @@ augmentation:
   brightness_factor: 0.2
   contrast_factor: 0.2
 
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
+
 # Experiment tracking
 wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 100
-  tags: ["max_overlap", "sdss_decals", "head_training"]
+  tags: ["max_overlap", "sdss_decals", "head_training", "26_standardized_features"]
 
 # Hardware
 device: "cuda"

@@ -1,4 +1,4 @@
-# Galaxy Sommelier Max Overlap Full Fine-tuning Configuration
+# Galaxy Sommelier Max Overlap Full Fine-tuning Configuration - STANDARDIZED to 26 features
 
 # Data paths
 data:
@@ -6,23 +6,24 @@ data:
   sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
   decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
   processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  # These catalogs are created by scripts/prepare_max_overlap_catalogs.py
   sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/sdss_max_overlap_training_catalog.csv"
   decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/decals_max_overlap_training_catalog.csv"
 
-# Max Overlap dataset configuration
+# Max Overlap dataset configuration - STANDARDIZED to 26 features
 mixed_data:
   use_mixed_dataset: true
-  dataset_name: "MaxOverlapDataset"
-  feature_set: "sdss"
+  dataset_name: "MaxOverlapDataset" # Tells train script to use our new loader
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
 
-# Model configuration
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 52 
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
-  freeze_backbone: false  # Fine-tuning: unfreeze backbone
+  freeze_backbone: false  # Full finetuning: unfreeze backbone
 
-# Training parameters for full fine-tuning (same as mixed)
+# Training parameters for full fine-tuning
 training:
   batch_size: 16  # Reduce batch size since full model uses more memory
   learning_rate: 1e-5  # Lower LR for backbone fine-tuning
@@ -39,13 +40,11 @@ lr_schedule:
   warmup_ratio: 0.1  # 10% of training for warmup
   min_lr_ratio: 0.01  # Minimum LR as 1% of initial
   
-# Data processing
+# Preprocessing and Augmentation (more aggressive for full fine-tuning)
 preprocessing:
   image_size: 224
   normalize_mean: [0.485, 0.456, 0.406]
   normalize_std: [0.229, 0.224, 0.225]
-  
-# Augmentation (more aggressive for full fine-tuning)
 augmentation:
   rotation_degrees: 180
   horizontal_flip: true
@@ -55,12 +54,18 @@ augmentation:
   gaussian_blur: true  # Add blur augmentation
   gaussian_noise: true  # Add noise augmentation
 
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
+
 # Experiment tracking
 wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 50  # Log more frequently
-  tags: ["max_overlap", "sdss_decals", "full_finetuning", "unfrozen_backbone"]
+  tags: ["max_overlap", "sdss_decals", "full_finetuning", "26_standardized_features"]
 
 # Hardware
 device: "cuda"

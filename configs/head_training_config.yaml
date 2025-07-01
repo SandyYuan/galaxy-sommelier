@@ -1,4 +1,5 @@
 # Galaxy Sommelier Head Training Configuration
+# First stage: train classification head with frozen DINOv2 backbone
 
 # Data paths
 data:
@@ -8,14 +9,14 @@ data:
   hst_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/hst"
   processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
   catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
-  catalog_name: "gz2_master_catalog_corrected.csv"  # Use corrected catalog with 240k galaxies
+  catalog_name: "gz2_master_catalog_corrected.csv"
 
-# Model configuration
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 74  # Galaxy Zoo 2 vote fractions (all fraction columns)
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
-  freeze_backbone: true
+  freeze_backbone: true  # Head training: freeze backbone
 
 # Training parameters
 training:
@@ -40,6 +41,33 @@ augmentation:
   brightness_factor: 0.2
   contrast_factor: 0.2
 
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
+
+# Experiment tracking
+wandb:
+  project: "galaxy-sommelier"
+  entity: "sihany"
+  log_freq: 100
+  tags: ["head_training", "frozen_backbone", "sdss_only", "26_standardized_features"]
+
+# Hardware
+device: "cuda"
+num_workers: 4
+pin_memory: true
+
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results"
+
+# Logging
+logging:
+  level: "INFO"
+  save_frequency: 5  # Save model every N epochs
+
 # Galaxy Zoo tasks
 galaxy_zoo_tasks:
   t01:
@@ -56,24 +84,4 @@ galaxy_zoo_tasks:
     description: "Is there any sign of a spiral arm pattern?"
   t05:
     responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
-    description: "How prominent is the central bulge?"
-
-# Experiment tracking
-wandb:
-  project: "galaxy-sommelier"
-  entity: "sihany"  # Set to your wandb username/team
-  log_freq: 100
-
-# Hardware
-device: "cuda"
-num_workers: 4
-pin_memory: true
-
-# Paths for outputs
-checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models"
-results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results"
-
-# Logging
-logging:
-  level: "INFO"
-  save_frequency: 5  # Save model every N epochs 
+    description: "How prominent is the central bulge?" 

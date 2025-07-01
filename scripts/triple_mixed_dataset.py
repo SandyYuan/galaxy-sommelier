@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Triple Mixed SDSS + DECaLS + HST Dataset for Galaxy Sommelier
-Combines three galaxy surveys using common morphological features.
+Triple Mixed Dataset: SDSS + DECaLS + HST
+Combines three galaxy surveys for cross-survey morphology training.
+Uses standardized 26-feature mapping for consistent evaluation.
 """
 
 import os
@@ -22,419 +23,380 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from sdss_decals_feature_mapping import SDSS_TO_DECALS, DECALS_TO_SDSS
 
+# Import the standardized feature mapping
+from standard_26_features import get_survey_columns, FEATURE_NAMES
+
 logger = logging.getLogger(__name__)
 
 class TripleMixedDataset(Dataset):
-    """Dataset class that combines SDSS, DECaLS, and HST Galaxy Zoo data"""
+    """
+    Dataset combining SDSS, DECaLS, and HST galaxies.
+    
+    Uses standardized 26-feature mapping to ensure consistent
+    output order across all surveys for fair model comparison.
+    """
     
     def __init__(self, sdss_catalog_path, decals_catalog_path, hst_catalog_path,
                  sdss_image_dir, decals_image_dir, hst_image_dir,
-                 survey_fractions={'sdss': 0.33, 'decals': 0.33, 'hst': 0.34}, 
-                 max_galaxies=None, transform=None, feature_set='sdss', 
-                 random_seed=42, high_quality=False):
-        """
-        Args:
-            sdss_catalog_path: Path to SDSS catalog CSV
-            decals_catalog_path: Path to DECaLS catalog CSV  
-            hst_catalog_path: Path to HST catalog CSV
-            sdss_image_dir: Directory containing SDSS images
-            decals_image_dir: Directory containing DECaLS images
-            hst_image_dir: Directory containing HST images
-            survey_fractions: Dict with fractions for each survey (should sum to 1.0)
-            max_galaxies: Total number of galaxies to use (None = use all available)
-            transform: Image transforms to apply
-            feature_set: 'sdss' - feature naming convention to use
-            random_seed: Random seed for reproducible sampling
-            high_quality: If True, select galaxies with highest classification counts
-        """
+                 survey_fractions={'sdss': 0.33, 'decals': 0.33, 'hst': 0.34},
+                 max_galaxies=150000, transform=None, split='train', 
+                 train_ratio=0.8, val_ratio=0.1, random_seed=42):
+        
+        self.transform = transform
+        self.split = split
+        self.random_seed = random_seed
+        
+        # Load the standardized 26-feature columns for each survey
+        self.sdss_feature_columns = get_survey_columns('sdss')
+        self.decals_feature_columns = get_survey_columns('decals')
+        self.hst_feature_columns = get_survey_columns('hst')
+        
+        print(f"Initializing TripleMixedDataset with standardized 26 features...")
+        print(f"Survey fractions: {survey_fractions}")
+        print(f"Max galaxies: {max_galaxies}")
+        print(f"Feature mapping: {len(FEATURE_NAMES)} features in standard order")
+        
+        # Load catalogs
+        self.load_catalogs(sdss_catalog_path, decals_catalog_path, hst_catalog_path)
+        
+        # Set image directories
         self.sdss_image_dir = Path(sdss_image_dir)
         self.decals_image_dir = Path(decals_image_dir)
         self.hst_image_dir = Path(hst_image_dir)
-        self.transform = transform
-        self.feature_set = feature_set
-        self.random_seed = random_seed
-        self.high_quality = high_quality
-        self.survey_fractions = survey_fractions
-        
-        # Validate survey fractions
-        total_fraction = sum(survey_fractions.values())
-        if abs(total_fraction - 1.0) > 0.01:
-            raise ValueError(f"Survey fractions must sum to 1.0, got {total_fraction}")
-        
-        # Set random seed for reproducible sampling
-        random.seed(random_seed)
-        np.random.seed(random_seed)
-        
-        quality_mode = "high-quality" if high_quality else "random"
-        logger.info(f"Loading triple mixed dataset with {survey_fractions} ({quality_mode})")
-        
-        # Load and prepare catalogs
-        self.load_catalogs(sdss_catalog_path, decals_catalog_path, hst_catalog_path)
         
         # Create mixed dataset
-        self.create_mixed_dataset(max_galaxies)
+        self.create_mixed_dataset(survey_fractions, max_galaxies)
         
-        logger.info(f"Triple mixed dataset created with {len(self.mixed_catalog)} galaxies")
-        for survey in ['sdss', 'decals', 'hst']:
-            count = (self.mixed_catalog['survey'] == survey).sum()
-            logger.info(f"{survey.upper()}: {count} galaxies ({count/len(self.mixed_catalog)*100:.1f}%)")
+        # Split dataset
+        self.split_dataset(train_ratio, val_ratio)
         
-    def load_catalogs(self, sdss_catalog_path, decals_catalog_path, hst_catalog_path):
-        """Load and prepare SDSS, DECaLS, and HST catalogs"""
+        print(f"Dataset created: {len(self.data)} {split} samples")
+        print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
+        print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
+        print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
+    
+    def load_catalogs(self, sdss_path, decals_path, hst_path):
+        """Load and validate feature columns in all catalogs."""
+        print("Loading catalogs and validating standardized features...")
         
         # Load SDSS catalog
-        logger.info(f"Loading SDSS catalog from {sdss_catalog_path}")
-        self.sdss_catalog = pd.read_csv(sdss_catalog_path)
-        logger.info(f"SDSS catalog: {len(self.sdss_catalog)} galaxies")
+        print(f"Loading SDSS catalog: {sdss_path}")
+        self.sdss_catalog = pd.read_csv(sdss_path)
+        print(f"  SDSS: {len(self.sdss_catalog)} galaxies")
+        
+        # Verify SDSS features
+        missing_sdss = [col for col in self.sdss_feature_columns if col not in self.sdss_catalog.columns]
+        if missing_sdss:
+            raise ValueError(f"Missing SDSS features: {missing_sdss}")
+        print(f"  ✅ All 26 SDSS features verified")
         
         # Load DECaLS catalog  
-        logger.info(f"Loading DECaLS catalog from {decals_catalog_path}")
-        self.decals_catalog = pd.read_csv(decals_catalog_path)
-        logger.info(f"DECaLS catalog: {len(self.decals_catalog)} galaxies")
+        print(f"Loading DECaLS catalog: {decals_path}")
+        self.decals_catalog = pd.read_csv(decals_path)
+        print(f"  DECaLS: {len(self.decals_catalog)} galaxies")
+        
+        # Verify DECaLS features
+        missing_decals = [col for col in self.decals_feature_columns if col not in self.decals_catalog.columns]
+        if missing_decals:
+            raise ValueError(f"Missing DECaLS features: {missing_decals}")
+        print(f"  ✅ All 26 DECaLS features verified")
         
         # Load HST catalog
-        logger.info(f"Loading HST catalog from {hst_catalog_path}")
-        self.hst_catalog = pd.read_csv(hst_catalog_path)
-        logger.info(f"HST catalog: {len(self.hst_catalog)} galaxies")
+        print(f"Loading HST catalog: {hst_path}")
+        self.hst_catalog = pd.read_csv(hst_path)
+        print(f"  HST: {len(self.hst_catalog)} galaxies")
         
-        # Add image existence checks and paths
-        self.check_image_availability()
+        # Verify HST features
+        missing_hst = [col for col in self.hst_feature_columns if col not in self.hst_catalog.columns]
+        if missing_hst:
+            raise ValueError(f"Missing HST features: {missing_hst}")
+        print(f"  ✅ All 26 HST features verified")
+    
+    def create_mixed_dataset(self, survey_fractions, max_galaxies):
+        """Create mixed dataset with specified survey fractions."""
         
-        # Get overlapping morphological features
-        self.get_common_features()
+        # Calculate sample sizes
+        sdss_size = int(max_galaxies * survey_fractions['sdss'])
+        decals_size = int(max_galaxies * survey_fractions['decals'])
+        hst_size = int(max_galaxies * survey_fractions['hst'])
         
-    def check_image_availability(self):
-        """Check which galaxies have available images"""
+        print(f"Target sample sizes:")
+        print(f"  SDSS: {sdss_size}")
+        print(f"  DECaLS: {decals_size}")
+        print(f"  HST: {hst_size}")
         
-        logger.info("Checking SDSS image availability...")
-        sdss_available = []
-        for idx, row in tqdm(self.sdss_catalog.iterrows(), total=len(self.sdss_catalog), desc="SDSS images"):
-            objid = row['dr7objid']
-            # Try different image naming conventions
-            jpg_path = self.sdss_image_dir / f"{row.get('asset_id', objid)}.jpg"
-            if not jpg_path.exists():
-                jpg_path = self.sdss_image_dir / f"sdss_{objid}.jpg"
-            if not jpg_path.exists():
-                jpg_path = self.sdss_image_dir / f"{objid}.jpg"
-            
-            if jpg_path.exists():
-                sdss_available.append(idx)
-                self.sdss_catalog.loc[idx, 'image_path'] = str(jpg_path)
+        # Sample from each catalog
+        np.random.seed(self.random_seed)
         
-        self.sdss_catalog = self.sdss_catalog.loc[sdss_available].reset_index(drop=True)
-        logger.info(f"SDSS galaxies with images: {len(self.sdss_catalog)}")
+        # SDSS sampling
+        sdss_sample_size = min(sdss_size, len(self.sdss_catalog))
+        sdss_indices = np.random.choice(len(self.sdss_catalog), sdss_sample_size, replace=False)
+        sdss_sample = self.sdss_catalog.iloc[sdss_indices].reset_index(drop=True)
         
-        logger.info("Checking DECaLS image availability...")
-        decals_available = []
-        for idx, row in tqdm(self.decals_catalog.iterrows(), total=len(self.decals_catalog), desc="DECaLS images"):
-            iauname = row['iauname']
-            if pd.isna(iauname) or not isinstance(iauname, str) or len(iauname) < 4:
-                continue
-                
-            # DECaLS naming: J103438.28-005109.6 -> J103/J103438.28-005109.6.png
-            directory = iauname[:4]  # e.g., 'J103'
-            image_path = self.decals_image_dir / directory / f"{iauname}.png"
-            
-            if image_path.exists():
-                decals_available.append(idx)
-                self.decals_catalog.loc[idx, 'image_path'] = str(image_path)
+        # DECaLS sampling
+        decals_sample_size = min(decals_size, len(self.decals_catalog))
+        decals_indices = np.random.choice(len(self.decals_catalog), decals_sample_size, replace=False)
+        decals_sample = self.decals_catalog.iloc[decals_indices].reset_index(drop=True)
         
-        self.decals_catalog = self.decals_catalog.loc[decals_available].reset_index(drop=True)
-        logger.info(f"DECaLS galaxies with images: {len(self.decals_catalog)}")
+        # HST sampling
+        hst_sample_size = min(hst_size, len(self.hst_catalog))
+        hst_indices = np.random.choice(len(self.hst_catalog), hst_sample_size, replace=False)
+        hst_sample = self.hst_catalog.iloc[hst_indices].reset_index(drop=True)
         
-        logger.info("Checking HST image availability...")
-        hst_available = []
-        for idx, row in tqdm(self.hst_catalog.iterrows(), total=len(self.hst_catalog), desc="HST images"):
-            zooniverse_id = row['zooniverse_id']
-            
-            # HST naming: cosmos_AHZ2001smd.png
-            png_path = self.hst_image_dir / f"cosmos_{zooniverse_id}.png"
-            fits_path = self.hst_image_dir / f"cosmos_{zooniverse_id}.fits"
-            
-            # Prefer PNG, fallback to FITS
-            if png_path.exists():
-                hst_available.append(idx)
-                self.hst_catalog.loc[idx, 'image_path'] = str(png_path)
-            elif fits_path.exists():
-                hst_available.append(idx)
-                self.hst_catalog.loc[idx, 'image_path'] = str(fits_path)
+        print(f"Actual sample sizes:")
+        print(f"  SDSS: {len(sdss_sample)}")
+        print(f"  DECaLS: {len(decals_sample)}")
+        print(f"  HST: {len(hst_sample)}")
         
-        self.hst_catalog = self.hst_catalog.loc[hst_available].reset_index(drop=True)
-        logger.info(f"HST galaxies with images: {len(self.hst_catalog)}")
+        # Create unified dataset
+        self.full_data = []
         
-    def get_common_features(self):
-        """Identify common morphological features across all three surveys"""
-        
-        # Get morphological feature columns (fractions only for consistency)
-        sdss_morphology = [col for col in self.sdss_catalog.columns if '_fraction' in col]
-        decals_morphology = [col for col in self.decals_catalog.columns if '_fraction' in col]
-        hst_morphology = [col for col in self.hst_catalog.columns if '_fraction' in col]
-        
-        # Core Galaxy Zoo tasks that exist in all surveys
-        core_tasks = {
-            't01_smooth_or_features_a01_smooth_fraction': 'smooth',
-            't01_smooth_or_features_a02_features_or_disk_fraction': 'features_disk',
-            't02_edgeon_a01_yes_fraction': 'edge_on_yes',
-            't02_edgeon_a02_no_fraction': 'edge_on_no',
-            't03_bar_a01_bar_fraction': 'bar_yes',
-            't03_bar_a02_no_bar_fraction': 'bar_no',
-            't04_spiral_a01_spiral_fraction': 'spiral_yes',
-            't04_spiral_a02_no_spiral_fraction': 'spiral_no',
-            't05_bulge_prominence_a01_no_bulge_fraction': 'bulge_none',
-            't05_bulge_prominence_a02_just_noticeable_fraction': 'bulge_noticeable',
-            't05_bulge_prominence_a03_obvious_fraction': 'bulge_obvious',
-            't05_bulge_prominence_a04_dominant_fraction': 'bulge_dominant',
-            't06_odd_a01_yes_fraction': 'odd_yes',
-            't06_odd_a02_no_fraction': 'odd_no',
-        }
-        
-        # Find features available in all three surveys
-        self.common_features_raw = []
-        self.common_features_names = []
-        
-        for raw_name, clean_name in core_tasks.items():
-            # Check if feature exists in all surveys
-            in_sdss = raw_name in sdss_morphology
-            
-            # For DECaLS, need to check mapped name
-            decals_name = SDSS_TO_DECALS.get(raw_name, raw_name)
-            in_decals = decals_name in decals_morphology
-            
-            # HST uses same naming as SDSS
-            in_hst = raw_name in hst_morphology
-            
-            if in_sdss and in_decals and in_hst:
-                self.common_features_raw.append(raw_name)
-                self.common_features_names.append(clean_name)
-        
-        logger.info(f"Found {len(self.common_features_raw)} overlapping morphological features across all surveys")
-        logger.info(f"Features: {self.common_features_names}")
-        
-        # Set the output feature names (use clean names)
-        self.output_features = self.common_features_names
-        
-    def create_mixed_dataset(self, max_galaxies):
-        """Create the mixed dataset by sampling from all three surveys"""
-        
-        # Determine sample sizes
-        if max_galaxies is None:
-            # Use minimum available across surveys * 3
-            min_available = min(len(self.sdss_catalog), len(self.decals_catalog), len(self.hst_catalog))
-            max_galaxies = min_available * 3
-        
-        sdss_count = int(max_galaxies * self.survey_fractions['sdss'])
-        decals_count = int(max_galaxies * self.survey_fractions['decals'])
-        hst_count = max_galaxies - sdss_count - decals_count  # Ensure exact total
-        
-        # Ensure we don't exceed available data
-        sdss_count = min(sdss_count, len(self.sdss_catalog))
-        decals_count = min(decals_count, len(self.decals_catalog))
-        hst_count = min(hst_count, len(self.hst_catalog))
-        
-        logger.info(f"Sampling {sdss_count} SDSS + {decals_count} DECaLS + {hst_count} HST galaxies")
-        
-        # Sample galaxies
-        if self.high_quality:
-            # Select galaxies with highest classification counts
-            sdss_votes = self.sdss_catalog['total_votes'].fillna(0)
-            sdss_sample = self.sdss_catalog.loc[sdss_votes.nlargest(sdss_count).index]
-            
-            decals_votes = self.decals_catalog['total_classifications'].fillna(0)
-            decals_sample = self.decals_catalog.loc[decals_votes.nlargest(decals_count).index]
-            
-            hst_votes = self.hst_catalog['total_count'].fillna(0)
-            hst_sample = self.hst_catalog.loc[hst_votes.nlargest(hst_count).index]
-            
-            logger.info(f"High-quality selection:")
-            logger.info(f"  SDSS votes: {sdss_votes.nlargest(sdss_count).min():.0f} to {sdss_votes.nlargest(sdss_count).max():.0f}")
-            logger.info(f"  DECaLS votes: {decals_votes.nlargest(decals_count).min():.0f} to {decals_votes.nlargest(decals_count).max():.0f}")
-            logger.info(f"  HST votes: {hst_votes.nlargest(hst_count).min():.0f} to {hst_votes.nlargest(hst_count).max():.0f}")
-        else:
-            sdss_sample = self.sdss_catalog.sample(n=sdss_count, random_state=self.random_seed)
-            decals_sample = self.decals_catalog.sample(n=decals_count, random_state=self.random_seed+1)
-            hst_sample = self.hst_catalog.sample(n=hst_count, random_state=self.random_seed+2)
-        
-        # Create unified catalog
-        mixed_data = []
-        
-        # Add SDSS galaxies
+        # Add SDSS samples
         for idx, row in sdss_sample.iterrows():
-            entry = {
+            self.full_data.append({
                 'survey': 'sdss',
-                'galaxy_id': row['dr7objid'],
-                'ra': row['ra'],
-                'dec': row['dec'],
-                'image_path': row['image_path'],
-                'weight': row.get('total_votes', 1.0)
-            }
-            
-            # Extract morphological features
-            for raw_feature, clean_feature in zip(self.common_features_raw, self.common_features_names):
-                entry[clean_feature] = row.get(raw_feature, np.nan)
-            
-            mixed_data.append(entry)
+                'catalog_idx': idx,
+                'objid': row.get('dr7objid', f'sdss_{idx}'),
+                'features': self.extract_standardized_features(row, 'sdss')
+            })
         
-        # Add DECaLS galaxies  
+        # Add DECaLS samples
         for idx, row in decals_sample.iterrows():
-            entry = {
+            self.full_data.append({
                 'survey': 'decals',
-                'galaxy_id': row['iauname'],
-                'ra': row['ra'],
-                'dec': row['dec'],
-                'image_path': row['image_path'],
-                'weight': row.get('total_classifications', 1.0)
-            }
-            
-            # Extract morphological features (using mapping)
-            for raw_feature, clean_feature in zip(self.common_features_raw, self.common_features_names):
-                decals_feature = SDSS_TO_DECALS.get(raw_feature, raw_feature)
-                entry[clean_feature] = row.get(decals_feature, np.nan)
-            
-            mixed_data.append(entry)
+                'catalog_idx': idx,
+                'objid': row.get('iauname', f'decals_{idx}'),
+                'features': self.extract_standardized_features(row, 'decals')
+            })
         
-        # Add HST galaxies
+        # Add HST samples
         for idx, row in hst_sample.iterrows():
-            entry = {
+            self.full_data.append({
                 'survey': 'hst',
-                'galaxy_id': row['zooniverse_id'],
-                'ra': row['RA'],
-                'dec': row['DEC'],
-                'image_path': row['image_path'],
-                'weight': row.get('total_count', 1.0)
-            }
-            
-            # Extract morphological features (same naming as SDSS)
-            for raw_feature, clean_feature in zip(self.common_features_raw, self.common_features_names):
-                entry[clean_feature] = row.get(raw_feature, np.nan)
-            
-            mixed_data.append(entry)
+                'catalog_idx': idx,
+                'objid': row.get('iauname', f'hst_{idx}'),
+                'features': self.extract_standardized_features(row, 'hst')
+            })
         
-        # Create DataFrame and shuffle
-        self.mixed_catalog = pd.DataFrame(mixed_data)
-        self.mixed_catalog = self.mixed_catalog.sample(frac=1, random_state=self.random_seed).reset_index(drop=True)
+        # Store samples for image loading
+        self.sdss_sample = sdss_sample
+        self.decals_sample = decals_sample
+        self.hst_sample = hst_sample
         
+        print(f"Mixed dataset created: {len(self.full_data)} total samples")
+    
+    def extract_standardized_features(self, row, survey):
+        """
+        Extract features in standardized order.
+        
+        This ensures all surveys output features in the same order
+        corresponding to the standard 26-feature mapping.
+        """
+        if survey == 'sdss':
+            feature_columns = self.sdss_feature_columns
+        elif survey == 'decals':
+            feature_columns = self.decals_feature_columns
+        elif survey == 'hst':
+            feature_columns = self.hst_feature_columns
+        else:
+            raise ValueError(f"Unknown survey: {survey}")
+        
+        # Extract features in standardized order
+        features = []
+        for col in feature_columns:
+            value = row.get(col, 0.0)  # Default to 0.0 if missing
+            if pd.isna(value):
+                value = 0.0
+            features.append(float(value))
+        
+        return np.array(features, dtype=np.float32)
+    
+    def split_dataset(self, train_ratio, val_ratio):
+        """Split dataset into train/val/test."""
+        
+        # Shuffle the full dataset
+        np.random.seed(self.random_seed)
+        indices = np.random.permutation(len(self.full_data))
+        
+        # Calculate split sizes
+        n_total = len(self.full_data)
+        n_train = int(n_total * train_ratio)
+        n_val = int(n_total * val_ratio)
+        
+        # Create splits
+        if self.split == 'train':
+            selected_indices = indices[:n_train]
+        elif self.split == 'val':
+            selected_indices = indices[n_train:n_train+n_val]
+        elif self.split == 'test':
+            selected_indices = indices[n_train+n_val:]
+        else:
+            raise ValueError(f"Unknown split: {self.split}")
+        
+        # Filter data for this split
+        self.data = [self.full_data[i] for i in selected_indices]
+    
+    def load_image(self, survey, catalog_idx, objid):
+        """Load image based on survey type."""
+        
+        if survey == 'sdss':
+            return self.load_sdss_image(catalog_idx, objid)
+        elif survey == 'decals':
+            return self.load_decals_image(catalog_idx, objid)
+        elif survey == 'hst':
+            return self.load_hst_image(catalog_idx, objid)
+        else:
+            raise ValueError(f"Unknown survey: {survey}")
+    
+    def load_sdss_image(self, catalog_idx, objid):
+        """Load SDSS image."""
+        # Use the same logic as existing SDSS dataset
+        row = self.sdss_sample.iloc[catalog_idx]
+        
+        # Try different filename patterns
+        possible_names = [
+            f"{objid}.jpg",
+            f"{row.get('dr7objid', objid)}.jpg"
+        ]
+        
+        for filename in possible_names:
+            image_path = self.sdss_image_dir / filename
+            if image_path.exists():
+                try:
+                    image = Image.open(image_path).convert('RGB')
+                    return image
+                except Exception as e:
+                    continue
+        
+        # Return black image if not found
+        return Image.new('RGB', (256, 256), color='black')
+    
+    def load_decals_image(self, catalog_idx, objid):
+        """Load DECaLS image."""
+        row = self.decals_sample.iloc[catalog_idx]
+        
+        # DECaLS uses iauname for filenames
+        filename = f"{row.get('iauname', objid)}.jpg"
+        image_path = self.decals_image_dir / filename
+        
+        if image_path.exists():
+            try:
+                image = Image.open(image_path).convert('RGB')
+                return image
+            except Exception as e:
+                pass
+        
+        # Return black image if not found
+        return Image.new('RGB', (256, 256), color='black')
+    
+    def load_hst_image(self, catalog_idx, objid):
+        """Load HST image."""
+        row = self.hst_sample.iloc[catalog_idx]
+        
+        # HST images are PNG files in subdirectories
+        subfolder = row.get('subfolder', 'unknown')
+        filename = row.get('filename', f"{objid}.png")
+        
+        image_path = self.hst_image_dir / subfolder / filename
+        
+        if image_path.exists():
+            try:
+                image = Image.open(image_path).convert('RGB')
+                return image
+            except Exception as e:
+                pass
+        
+        # Return black image if not found
+        return Image.new('RGB', (256, 256), color='black')
+    
     def __len__(self):
-        return len(self.mixed_catalog)
-        
+        return len(self.data)
+    
     def __getitem__(self, idx):
-        """Get a single galaxy sample"""
-        row = self.mixed_catalog.iloc[idx]
+        sample = self.data[idx]
         
         # Load image
-        image_path = row['image_path']
-        try:
-            if image_path.endswith('.fits'):
-                # Handle FITS files
-                from astropy.io import fits
-                with fits.open(image_path) as hdul:
-                    image_data = hdul[0].data
-                # Convert to PIL Image
-                image_data = np.nan_to_num(image_data, nan=0.0)
-                # Normalize to 0-255
-                vmin, vmax = np.percentile(image_data, [1, 99])
-                if vmax > vmin:
-                    image_data = np.clip((image_data - vmin) / (vmax - vmin) * 255, 0, 255)
-                else:
-                    image_data = np.zeros_like(image_data)
-                image = Image.fromarray(image_data.astype(np.uint8), mode='L')
-                # Convert to RGB
-                image = image.convert('RGB')
-            else:
-                # Handle JPG/PNG files
-                image = Image.open(image_path)
-                if image.mode != 'RGB':
-                    image = image.convert('RGB')
-        except Exception as e:
-            logger.warning(f"Error loading image {image_path}: {e}")
-            # Create blank image
-            image = Image.new('RGB', (224, 224), (0, 0, 0))
+        image = self.load_image(
+            sample['survey'], 
+            sample['catalog_idx'], 
+            sample['objid']
+        )
         
         # Apply transforms
         if self.transform:
             image = self.transform(image)
         
-        # Extract morphological labels
-        labels = []
-        for feature in self.output_features:
-            value = row.get(feature, np.nan)
-            if pd.isna(value):
-                value = 0.0  # Use 0 for missing values
-            labels.append(float(value))
-        
-        labels = torch.tensor(labels, dtype=torch.float32)
+        # Get features (already in standardized order)
+        features = sample['features']
         
         return {
             'image': image,
-            'labels': labels,
-            'survey': row['survey'],
-            'galaxy_id': row['galaxy_id'],
-            'weight': float(row['weight'])
+            'labels': torch.tensor(features, dtype=torch.float32),
+            'survey': sample['survey'],
+            'objid': sample['objid']
         }
 
-def create_triple_mixed_data_loaders(config, batch_size=16, num_workers=4):
-    """Create data loaders for triple mixed training"""
+def get_triple_mixed_data_loaders(config, transforms_dict):
+    """
+    Create data loaders for triple mixed dataset.
     
-    # Data paths
-    sdss_catalog = "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz2_master_catalog_corrected.csv"
-    decals_catalog = "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_decals_volunteers_5_votes_non_overlap.csv"
-    hst_catalog = "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_hubble_main.csv"
+    Returns train, validation, and test loaders using standardized
+    26-feature mapping.
+    """
+    from torch.utils.data import DataLoader
     
-    sdss_images = "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
-    decals_images = "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
-    hst_images = "/pscratch/sd/s/sihany/galaxy-sommelier-data/hubble/images"
+    # Extract paths from config
+    sdss_catalog = config['data']['sdss_catalog_path']
+    decals_catalog = config['data']['decals_catalog_path']
+    hst_catalog = config['data']['hst_catalog_path']
     
-    # Image transforms
-    train_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.RandomRotation(180),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
+    sdss_images = config['data']['sdss_dir']
+    decals_images = config['data']['decals_dir']
+    hst_images = config['data']['hst_dir']
     
-    val_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
+    # Get dataset parameters
+    mixed_config = config['mixed_data']
+    survey_fractions = mixed_config['survey_fractions']
+    max_galaxies = mixed_config['max_galaxies']
     
-    # Create dataset
-    logger.info("Creating triple mixed dataset...")
-    full_dataset = TripleMixedDataset(
-        sdss_catalog_path=sdss_catalog,
-        decals_catalog_path=decals_catalog,
-        hst_catalog_path=hst_catalog,
-        sdss_image_dir=sdss_images,
-        decals_image_dir=decals_images,
-        hst_image_dir=hst_images,
-        survey_fractions={'sdss': 0.33, 'decals': 0.33, 'hst': 0.34},
-        max_galaxies=150000,  # ~50k from each survey
-        transform=None,  # Will be set per split
-        random_seed=42
+    batch_size = config['training']['batch_size']
+    num_workers = config.get('num_workers', 4)
+    
+    print(f"Creating triple mixed data loaders with standardized 26 features...")
+    
+    # Create datasets
+    train_dataset = TripleMixedDataset(
+        sdss_catalog, decals_catalog, hst_catalog,
+        sdss_images, decals_images, hst_images,
+        survey_fractions=survey_fractions,
+        max_galaxies=max_galaxies,
+        transform=transforms_dict['train'],
+        split='train'
     )
     
-    # Split dataset
-    train_size = int(0.8 * len(full_dataset))
-    val_size = int(0.1 * len(full_dataset))
-    test_size = len(full_dataset) - train_size - val_size
-    
-    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
-        full_dataset, [train_size, val_size, test_size],
-        generator=torch.Generator().manual_seed(42)
+    val_dataset = TripleMixedDataset(
+        sdss_catalog, decals_catalog, hst_catalog,
+        sdss_images, decals_images, hst_images,
+        survey_fractions=survey_fractions,
+        max_galaxies=max_galaxies,
+        transform=transforms_dict['val'],
+        split='val'
     )
     
-    # Set transforms
-    train_dataset.dataset.transform = train_transform
-    val_dataset.dataset.transform = val_transform
-    test_dataset.dataset.transform = val_transform
+    test_dataset = TripleMixedDataset(
+        sdss_catalog, decals_catalog, hst_catalog,
+        sdss_images, decals_images, hst_images,
+        survey_fractions=survey_fractions,
+        max_galaxies=max_galaxies,
+        transform=transforms_dict['test'],
+        split='test'
+    )
     
     # Create data loaders
     train_loader = DataLoader(
         train_dataset, 
         batch_size=batch_size, 
-        shuffle=True, 
+        shuffle=True,
         num_workers=num_workers,
         pin_memory=True
     )
@@ -442,7 +404,7 @@ def create_triple_mixed_data_loaders(config, batch_size=16, num_workers=4):
     val_loader = DataLoader(
         val_dataset, 
         batch_size=batch_size, 
-        shuffle=False, 
+        shuffle=False,
         num_workers=num_workers,
         pin_memory=True
     )
@@ -450,10 +412,15 @@ def create_triple_mixed_data_loaders(config, batch_size=16, num_workers=4):
     test_loader = DataLoader(
         test_dataset, 
         batch_size=batch_size, 
-        shuffle=False, 
+        shuffle=False,
         num_workers=num_workers,
         pin_memory=True
     )
+    
+    print(f"Data loaders created:")
+    print(f"  Train: {len(train_dataset)} samples, {len(train_loader)} batches")
+    print(f"  Val: {len(val_dataset)} samples, {len(val_loader)} batches")
+    print(f"  Test: {len(test_dataset)} samples, {len(test_loader)} batches")
     
     return train_loader, val_loader, test_loader
 
@@ -461,7 +428,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
     # Test the dataset
-    train_loader, val_loader, test_loader = create_triple_mixed_data_loaders({})
+    train_loader, val_loader, test_loader = get_triple_mixed_data_loaders({})
     
     print(f"Training samples: {len(train_loader.dataset)}")
     print(f"Validation samples: {len(val_loader.dataset)}")

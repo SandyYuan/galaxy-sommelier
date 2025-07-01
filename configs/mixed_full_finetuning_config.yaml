@@ -11,20 +11,20 @@ data:
   catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
   catalog_name: "gz2_master_catalog_corrected.csv"  # SDSS catalog
   
-# Mixed dataset configuration
+# Mixed dataset configuration - STANDARDIZED to 26 features
 mixed_data:
   sdss_fraction: 0.5  # 50% SDSS, 50% DECaLS
   use_mixed_dataset: true
-  feature_set: "sdss"  # Use SDSS feature naming convention
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
 
-# Model configuration (same as SDSS training)
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 52  # Number of overlapping features between SDSS and DECaLS
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
   freeze_backbone: false  # Full finetuning: unfreeze backbone
 
-# Training parameters for full fine-tuning (same as SDSS)
+# Training parameters for full fine-tuning
 training:
   batch_size: 16  # Reduce batch size since full model uses more memory
   learning_rate: 1e-5  # Lower LR for backbone fine-tuning
@@ -57,6 +57,12 @@ augmentation:
   gaussian_blur: true  # Add blur augmentation
   gaussian_noise: true  # Add noise augmentation
 
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
+
 # Galaxy Zoo tasks (core overlapping tasks)
 galaxy_zoo_tasks:
   t01:
@@ -80,7 +86,7 @@ wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 50  # Log more frequently
-  tags: ["mixed_dataset", "sdss_decals", "full_finetuning", "50_50_split", "unfrozen_backbone"]
+  tags: ["mixed_dataset", "sdss_decals", "full_finetuning", "26_standardized_features"]
 
 # Hardware
 device: "cuda"

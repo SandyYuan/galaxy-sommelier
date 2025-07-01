@@ -13,14 +13,14 @@ data:
   
   # Additional paths for triple mixed dataset
   sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz2_master_catalog_corrected.csv"
-  decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_decals_volunteers_5_votes_non_overlap.csv"
+  decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_decals_volunteers_1_and_2.csv"
   hst_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_hubble_main.csv"
   
-# Mixed dataset configuration - EXPANDED to 3 surveys
+# Mixed dataset configuration - STANDARDIZED to 26 features
 mixed_data:
   use_mixed_dataset: true
   dataset_name: "TripleMixedDataset"
-  feature_set: "sdss"  # Use SDSS feature naming convention
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
   
   # Survey fractions for 3-way split
   survey_fractions:
@@ -31,14 +31,14 @@ mixed_data:
   # Dataset sizes
   max_galaxies: 150000  # ~50k from each survey
 
-# Model configuration (same as mixed training)
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 14  # Common morphological features across all 3 surveys
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
   freeze_backbone: false  # Full finetuning: unfreeze backbone
 
-# Training parameters for full fine-tuning (same as mixed)
+# Training parameters for full fine-tuning
 training:
   batch_size: 16  # Reduce batch size since full model uses more memory
   learning_rate: 1e-5  # Lower LR for backbone fine-tuning
@@ -71,30 +71,19 @@ augmentation:
   gaussian_blur: true  # Add blur augmentation
   gaussian_noise: true  # Add noise augmentation
 
-# Galaxy Zoo tasks (core overlapping tasks across all 3 surveys)
-galaxy_zoo_tasks:
-  t01:
-    responses: ["smooth", "features_or_disk", "star_or_artifact"]
-    description: "Is the galaxy smooth and rounded, or does it have features?"
-  t02:
-    responses: ["edge_on_yes", "edge_on_no"]
-    description: "Could this be a disk viewed edge-on?"
-  t03:
-    responses: ["bar_yes", "bar_no"]
-    description: "Is there a bar feature through the center of the galaxy?"
-  t04:
-    responses: ["spiral_yes", "spiral_no"]
-    description: "Is there any sign of a spiral arm pattern?"
-  t05:
-    responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
-    description: "How prominent is the central bulge?"
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+# Features will be output in the order defined in standard_26_features.py
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
 
 # Experiment tracking
 wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 50  # Log more frequently
-  tags: ["triple_mixed_dataset", "sdss_decals_hst", "full_finetuning", "33_33_34_split", "unfrozen_backbone"]
+  tags: ["triple_mixed_dataset", "sdss_decals_hst", "full_finetuning", "26_standardized_features"]
 
 # Hardware
 device: "cuda"
@@ -117,4 +106,22 @@ logging:
 early_stopping:
   patience: 3  # Stop if no improvement for 3 epochs
   min_delta: 0.001  # Minimum improvement threshold
-  monitor: "val_correlation"  # Monitor validation correlation 
+  monitor: "val_correlation"  # Monitor validation correlation
+
+# Galaxy Zoo tasks (core overlapping tasks across all 3 surveys)
+galaxy_zoo_tasks:
+  t01:
+    responses: ["smooth", "features_or_disk", "star_or_artifact"]
+    description: "Is the galaxy smooth and rounded, or does it have features?"
+  t02:
+    responses: ["edge_on_yes", "edge_on_no"]
+    description: "Could this be a disk viewed edge-on?"
+  t03:
+    responses: ["bar_yes", "bar_no"]
+    description: "Is there a bar feature through the center of the galaxy?"
+  t04:
+    responses: ["spiral_yes", "spiral_no"]
+    description: "Is there any sign of a spiral arm pattern?"
+  t05:
+    responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
+    description: "How prominent is the central bulge?" 

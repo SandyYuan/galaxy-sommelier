@@ -1,4 +1,4 @@
-# Galaxy Sommelier Mixed SDSS+DECaLS High Quality Full Fine-tuning Configuration
+# Galaxy Sommelier Mixed High Quality Configuration - STANDARDIZED to 26 features
 
 # Data paths
 data:
@@ -9,23 +9,23 @@ data:
   hst_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/hst"
   processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
   catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
-  catalog_name: "gz2_master_catalog_corrected.csv"  # SDSS catalog
+  catalog_name: "gz2_master_catalog_corrected.csv"
   
-# Mixed dataset configuration with high quality SDSS selection
+# Mixed dataset configuration - STANDARDIZED to 26 features
 mixed_data:
   sdss_fraction: 0.5  # 50% SDSS, 50% DECaLS
   use_mixed_dataset: true
-  feature_set: "sdss"  # Use SDSS feature naming convention
-  high_quality: true  # NEW: Select SDSS galaxies with highest classification counts
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
+  quality_filter: true  # Enable high quality filtering
 
-# Model configuration (same as SDSS training)
+# Model configuration - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 52  # Number of overlapping features between SDSS and DECaLS
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.2
   freeze_backbone: false  # Full finetuning: unfreeze backbone
 
-# Training parameters for full fine-tuning (same as SDSS)
+# Training parameters for full fine-tuning
 training:
   batch_size: 16  # Reduce batch size since full model uses more memory
   learning_rate: 1e-5  # Lower LR for backbone fine-tuning
@@ -58,30 +58,18 @@ augmentation:
   gaussian_blur: true  # Add blur augmentation
   gaussian_noise: true  # Add noise augmentation
 
-# Galaxy Zoo tasks (core overlapping tasks)
-galaxy_zoo_tasks:
-  t01:
-    responses: ["smooth", "features_or_disk", "star_or_artifact"]
-    description: "Is the galaxy smooth and rounded, or does it have features?"
-  t02:
-    responses: ["edge_on_yes", "edge_on_no"]
-    description: "Could this be a disk viewed edge-on?"
-  t03:
-    responses: ["bar_yes", "bar_no"]
-    description: "Is there a bar feature through the center of the galaxy?"
-  t04:
-    responses: ["spiral_yes", "spiral_no"]
-    description: "Is there any sign of a spiral arm pattern?"
-  t05:
-    responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
-    description: "How prominent is the central bulge?"
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
 
 # Experiment tracking
 wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 50  # Log more frequently
-  tags: ["mixed_dataset", "sdss_decals", "high_quality", "full_finetuning", "50_50_split", "unfrozen_backbone"]
+  tags: ["mixed_dataset", "sdss_decals", "full_finetuning", "high_quality", "26_standardized_features"]
 
 # Hardware
 device: "cuda"
@@ -92,7 +80,7 @@ pin_memory: true
 checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_high_quality"
 results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/mixed_high_quality"
 
-# Initialization - start from high-quality head-trained model
+# Initialization - start from head-trained model
 pretrained_checkpoint: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_high_quality/best_model.pt"
 
 # Logging

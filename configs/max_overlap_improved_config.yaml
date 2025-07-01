@@ -1,4 +1,4 @@
-# Galaxy Sommelier Max Overlap - Improved Regularization Configuration
+# Galaxy Sommelier Max Overlap - Improved Regularization Configuration - STANDARDIZED to 26 features
 # Optimized to prevent overfitting with better early stopping and regularization
 
 # Data paths
@@ -10,16 +10,16 @@ data:
   sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/sdss_max_overlap_training_catalog.csv"
   decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/max_overlap_catalogs/decals_max_overlap_training_catalog.csv"
 
-# Max Overlap dataset configuration
+# Max Overlap dataset configuration - STANDARDIZED to 26 features
 mixed_data:
   use_mixed_dataset: true
   dataset_name: "MaxOverlapDataset"
-  feature_set: "sdss"
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
 
-# Model configuration - Increased regularization
+# Model configuration - Increased regularization - STANDARDIZED to 26 outputs
 model:
   name: "facebook/dinov2-base"
-  num_outputs: 52 
+  num_outputs: 26  # STANDARDIZED: All models use same 26 features
   dropout_rate: 0.3  # Increased from 0.2
   freeze_backbone: false
 
@@ -58,6 +58,12 @@ augmentation:
   cutout: true           # Add cutout augmentation
   mixup_alpha: 0.2       # Add mixup augmentation
 
+# STANDARDIZED 26-feature mapping (all models use this exact order)
+standard_features:
+  use_standard_mapping: true
+  mapping_file: "standard_26_features.py"
+  total_features: 26
+
 # Improved early stopping - Monitor validation loss
 early_stopping:
   patience: 3           # Stop after 3 epochs without improvement
@@ -70,7 +76,7 @@ wandb:
   project: "galaxy-sommelier"
   entity: "sihany"
   log_freq: 50
-  tags: ["max_overlap", "improved_regularization", "early_stopping_fixed"]
+  tags: ["max_overlap", "improved_regularization", "early_stopping_fixed", "26_standardized_features"]
 
 # Hardware
 device: "cuda"
