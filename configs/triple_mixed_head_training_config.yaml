@@ -1,0 +1,101 @@
+# Galaxy Sommelier Triple Mixed SDSS+DECaLS+HST Head Training Configuration
+
+# Data paths
+data:
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
+  desi_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/desi"
+  hst_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/hubble/images"
+  processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
+  catalog_name: "gz2_master_catalog_corrected.csv"  # SDSS catalog
+  
+  # Additional paths for triple mixed dataset
+  sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz2_master_catalog_corrected.csv"
+  decals_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_decals_volunteers_5_votes_non_overlap.csv"
+  hst_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz_hubble_main.csv"
+  
+# Mixed dataset configuration - EXPANDED to 3 surveys
+mixed_data:
+  use_mixed_dataset: true
+  dataset_name: "TripleMixedDataset"
+  feature_set: "sdss"  # Use SDSS feature naming convention
+  
+  # Survey fractions for 3-way split
+  survey_fractions:
+    sdss: 0.33
+    decals: 0.33  
+    hst: 0.34
+  
+  # Dataset sizes
+  max_galaxies: 150000  # ~50k from each survey
+
+# Model configuration (same as mixed training)
+model:
+  name: "facebook/dinov2-base"
+  num_outputs: 14  # Common morphological features across all 3 surveys
+  dropout_rate: 0.2
+  freeze_backbone: true  # Head training: freeze backbone
+
+# Training parameters (same as mixed head training)
+training:
+  batch_size: 32
+  learning_rate: 1e-4
+  num_epochs: 5
+  warmup_steps: 1000
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  
+# Data processing
+preprocessing:
+  image_size: 224
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+  
+# Augmentation
+augmentation:
+  rotation_degrees: 180
+  horizontal_flip: true
+  vertical_flip: true
+  brightness_factor: 0.2
+  contrast_factor: 0.2
+
+# Galaxy Zoo tasks (core overlapping tasks across all 3 surveys)
+galaxy_zoo_tasks:
+  t01:
+    responses: ["smooth", "features_or_disk", "star_or_artifact"]
+    description: "Is the galaxy smooth and rounded, or does it have features?"
+  t02:
+    responses: ["edge_on_yes", "edge_on_no"]
+    description: "Could this be a disk viewed edge-on?"
+  t03:
+    responses: ["bar_yes", "bar_no"]
+    description: "Is there a bar feature through the center of the galaxy?"
+  t04:
+    responses: ["spiral_yes", "spiral_no"]
+    description: "Is there any sign of a spiral arm pattern?"
+  t05:
+    responses: ["no_bulge", "obvious_bulge", "dominant_bulge"]
+    description: "How prominent is the central bulge?"
+
+# Experiment tracking
+wandb:
+  project: "galaxy-sommelier"
+  entity: "sihany"
+  log_freq: 100
+  tags: ["triple_mixed_dataset", "sdss_decals_hst", "head_training", "33_33_34_split"]
+
+# Hardware
+device: "cuda"
+num_workers: 4
+pin_memory: true
+
+# Paths for outputs
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/triple_mixed"
+
+# Logging
+logging:
+  level: "INFO"
+  save_frequency: 5  # Save model every N epochs 

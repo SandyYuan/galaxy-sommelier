@@ -203,6 +203,46 @@ class GalaxyTrainer:
                 # Use the same transformations for the validation split
                 self.val_dataset.dataset.transform = self.val_transform
                 
+            elif dataset_name == "TripleMixedDataset":
+                from scripts.triple_mixed_dataset import TripleMixedDataset
+                
+                # Get paths from config
+                sdss_cat_path = self.config['data']['sdss_catalog_path']
+                decals_cat_path = self.config['data']['decals_catalog_path']
+                hst_cat_path = self.config['data']['hst_catalog_path']
+                
+                # Create dataset
+                full_dataset = TripleMixedDataset(
+                    sdss_catalog_path=sdss_cat_path,
+                    decals_catalog_path=decals_cat_path,
+                    hst_catalog_path=hst_cat_path,
+                    sdss_image_dir=self.config['data']['sdss_dir'],
+                    decals_image_dir=self.config['data']['decals_dir'],
+                    hst_image_dir=self.config['data']['hst_dir'],
+                    survey_fractions=mixed_config.get('survey_fractions', {'sdss': 0.33, 'decals': 0.33, 'hst': 0.34}),
+                    max_galaxies=mixed_config.get('max_galaxies', 150000),
+                    transform=None,  # Will be set per split
+                    feature_set=mixed_config.get('feature_set', 'sdss'),
+                    random_seed=42
+                )
+                
+                # Split dataset
+                train_size = int(0.8 * len(full_dataset))
+                val_size = int(0.1 * len(full_dataset))
+                test_size = len(full_dataset) - train_size - val_size
+                
+                self.train_dataset, self.val_dataset, test_dataset = torch.utils.data.random_split(
+                    full_dataset, [train_size, val_size, test_size],
+                    generator=torch.Generator().manual_seed(42)
+                )
+                
+                # Set transforms for each split
+                self.train_dataset.dataset.transform = self.train_transform
+                self.val_dataset.dataset.transform = self.val_transform
+                
+                logger.info(f"Triple mixed dataset: {len(full_dataset)} total galaxies")
+                logger.info(f"Train: {len(self.train_dataset)}, Val: {len(self.val_dataset)}, Test: {len(test_dataset)}")
+                
             else: # Original mixed dataset logic
                 from mixed_dataset import create_mixed_data_loaders
                 
