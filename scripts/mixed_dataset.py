@@ -33,7 +33,8 @@ class MixedSDSSDECaLSDataset(Dataset):
     def __init__(self, sdss_catalog_path, decals_catalog_path, 
                  sdss_image_dir, decals_image_dir,
                  sdss_fraction=0.5, max_galaxies=None, transform=None, 
-                 feature_set='sdss', random_seed=42, high_quality=False):
+                 feature_set='sdss', random_seed=42, high_quality=False,
+                 master_dataset=False):
         """
         Args:
             sdss_catalog_path: Path to SDSS catalog CSV
@@ -53,6 +54,7 @@ class MixedSDSSDECaLSDataset(Dataset):
         self.feature_set = feature_set
         self.random_seed = random_seed
         self.high_quality = high_quality
+        self.master_dataset = master_dataset
         
         # Load the standardized 26-feature columns for each survey
         self.sdss_feature_columns = get_survey_columns('sdss')
@@ -72,9 +74,17 @@ class MixedSDSSDECaLSDataset(Dataset):
         # Create mixed dataset
         self.create_mixed_dataset(sdss_fraction, max_galaxies)
         
-        logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
-        logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
-        logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
+        if master_dataset:
+            # Master dataset keeps all data for splits to use
+            self.mixed_catalog_full = self.mixed_catalog.copy()
+            logger.info(f"Master dataset created with {len(self.mixed_catalog_full)} galaxies")
+            logger.info(f"SDSS: {(self.mixed_catalog_full['survey'] == 'sdss').sum()}")
+            logger.info(f"DECaLS: {(self.mixed_catalog_full['survey'] == 'decals').sum()}")
+        else:
+            logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
+            logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
+            logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
+        
         logger.info(f"Output features: {len(self.output_features)} standardized features")
         logger.info(f"Feature verification: Each sample will output exactly {len(self.output_features)} features")
         
@@ -294,6 +304,61 @@ class MixedSDSSDECaLSDataset(Dataset):
             # Could add these back with a custom collate function if needed
         }
 
+
+class MixedSplitDataset(Dataset):
+    """Dataset for train/val/test splits that reuses master dataset's processed data"""
+    
+    def __init__(self, master_dataset, indices, transform=None):
+        """
+        Args:
+            master_dataset: MixedSDSSDECaLSDataset instance with processed data
+            indices: List of indices for this split
+            transform: Transform to apply to images
+        """
+        self.master_dataset = master_dataset
+        self.indices = indices
+        self.transform = transform
+        
+        # Use the master dataset's processed catalog
+        if hasattr(master_dataset, 'mixed_catalog_full'):
+            self.mixed_catalog = master_dataset.mixed_catalog_full.iloc[indices].reset_index(drop=True)
+        else:
+            self.mixed_catalog = master_dataset.mixed_catalog.iloc[indices].reset_index(drop=True)
+        
+        # Copy output features from master dataset
+        self.output_features = master_dataset.output_features
+        
+    def __len__(self):
+        return len(self.mixed_catalog)
+    
+    def __getitem__(self, idx):
+        row = self.mixed_catalog.iloc[idx]
+        
+        # Load image
+        image_path = row['image_path']
+        try:
+            image = Image.open(image_path).convert('RGB')
+        except Exception as e:
+            logger.warning(f"Error loading image {image_path}: {e}")
+            # Return a black image as fallback
+            image = Image.new('RGB', (224, 224), color=(0, 0, 0))
+        
+        # Apply transforms
+        if self.transform:
+            image = self.transform(image)
+        
+        # Get morphological labels
+        labels = torch.tensor([row[feature] for feature in self.output_features], dtype=torch.float32)
+        
+        # Get weight
+        weight = torch.tensor(row['weight'], dtype=torch.float32)
+        
+        return {
+            'image': image,
+            'labels': labels,
+            'weight': weight
+        }
+
 def create_mixed_data_loaders(config, transforms_dict, sample_size=None, sdss_fraction=0.5, high_quality=False):
     """Create mixed SDSS+DECaLS data loaders"""
     
@@ -306,74 +371,52 @@ def create_mixed_data_loaders(config, transforms_dict, sample_size=None, sdss_fr
     sdss_catalog = Path(data_config['catalogs_dir']) / 'gz2_master_catalog_corrected.csv'
     decals_catalog = Path(data_config['catalogs_dir']) / 'gz_decals_volunteers_1_and_2.csv'
     
-    # Create mixed dataset
-    full_dataset = MixedSDSSDECaLSDataset(
+    # Create master dataset that does all expensive filtering once
+    master_dataset = MixedSDSSDECaLSDataset(
         sdss_catalog_path=sdss_catalog,
         decals_catalog_path=decals_catalog,
         sdss_image_dir=data_config['sdss_dir'],
         decals_image_dir=data_config['decals_dir'],
         sdss_fraction=sdss_fraction,
         max_galaxies=sample_size,
-        transform=None,  # Will be set per split
-        feature_set='sdss',  # Use SDSS feature naming
-        high_quality=high_quality
+        transform=None,
+        feature_set='sdss',
+        random_seed=42,
+        high_quality=high_quality,
+        master_dataset=True  # This tells it to keep full data for splits
     )
     
     # Split dataset  
-    dataset_size = len(full_dataset)
+    dataset_size = len(master_dataset)
     train_size = int(0.8 * dataset_size)
     val_size = int(0.1 * dataset_size) 
     test_size = dataset_size - train_size - val_size
     
     logger.info(f"Dataset splits: train={train_size}, val={val_size}, test={test_size}")
     
-    # Create splits
+    # Create indices for splits
     train_indices = list(range(train_size))
     val_indices = list(range(train_size, train_size + val_size))
     test_indices = list(range(train_size + val_size, dataset_size))
     
-    # Create separate dataset instances with different transforms for each split
-    train_dataset_with_transform = MixedSDSSDECaLSDataset(
-        sdss_catalog_path=sdss_catalog,
-        decals_catalog_path=decals_catalog,
-        sdss_image_dir=data_config['sdss_dir'],
-        decals_image_dir=data_config['decals_dir'],
-        sdss_fraction=sdss_fraction,
-        max_galaxies=sample_size,
-        transform=transforms_dict['train'],
-        feature_set='sdss',
-        random_seed=42,
-        high_quality=high_quality
+    # Create efficient split datasets that reuse master's processed data
+    train_dataset = MixedSplitDataset(
+        master_dataset=master_dataset,
+        indices=train_indices,
+        transform=transforms_dict['train']
     )
-    train_dataset = torch.utils.data.Subset(train_dataset_with_transform, train_indices)
     
-    val_dataset_with_transform = MixedSDSSDECaLSDataset(
-        sdss_catalog_path=sdss_catalog,
-        decals_catalog_path=decals_catalog,
-        sdss_image_dir=data_config['sdss_dir'],
-        decals_image_dir=data_config['decals_dir'],
-        sdss_fraction=sdss_fraction,
-        max_galaxies=sample_size,
-        transform=transforms_dict['val'],
-        feature_set='sdss',
-        random_seed=42,  # Same seed for consistent splits
-        high_quality=high_quality
+    val_dataset = MixedSplitDataset(
+        master_dataset=master_dataset,
+        indices=val_indices,
+        transform=transforms_dict['val']
     )
-    val_dataset = torch.utils.data.Subset(val_dataset_with_transform, val_indices)
     
-    test_dataset_with_transform = MixedSDSSDECaLSDataset(
-        sdss_catalog_path=sdss_catalog,
-        decals_catalog_path=decals_catalog,
-        sdss_image_dir=data_config['sdss_dir'],
-        decals_image_dir=data_config['decals_dir'],
-        sdss_fraction=sdss_fraction,
-        max_galaxies=sample_size,
-        transform=transforms_dict['test'],
-        feature_set='sdss',
-        random_seed=42,  # Same seed for consistent splits
-        high_quality=high_quality
+    test_dataset = MixedSplitDataset(
+        master_dataset=master_dataset,
+        indices=test_indices,
+        transform=transforms_dict['test']
     )
-    test_dataset = torch.utils.data.Subset(test_dataset_with_transform, test_indices)
     
     # Create data loaders
     train_loader = DataLoader(
