@@ -182,13 +182,13 @@ def get_model_info_from_config(config_path):
         'config': config
     }
 
-def get_model_features_from_config(config_path, model_path):
-    """Determine model features based on config using the unified registry."""
+def get_model_feature_indices(config_path, model_path):
+    """Get the model feature indices using the unified registry."""
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Use the unified registry to get features
-    return FeatureRegistry.get_benchmark_features(
+    # Use the unified registry to get feature indices
+    return FeatureRegistry.get_feature_indices(
         model_path=model_path,
         config=config
     )
@@ -216,41 +216,41 @@ def run_comparison(args):
     print(f"Model 2 ({model2_info['model_type']}) predictions shape: {model2_preds.shape}")
     print(f"True labels shape: {true_labels.shape}")
     
-    # Get feature columns for each model based on their configs
+    # Get benchmark features (same 9 features for all models)
+    benchmark_features = FeatureRegistry.get_benchmark_features()
     ukidss_label_columns = ukidss_dataset.label_columns
     
-    model1_features = get_model_features_from_config(model1_info['config_path'], model1_info['model_path'])
-    model2_features = get_model_features_from_config(model2_info['config_path'], model2_info['model_path'])
+    # Get model-specific indices for these benchmark features
+    model1_indices = get_model_feature_indices(model1_info['config_path'], model1_info['model_path'])
+    model2_indices = get_model_feature_indices(model2_info['config_path'], model2_info['model_path'])
     
-    # Validate feature counts match model outputs
-    if len(model1_features) != model1_info['num_features']:
-        print(f"WARNING: Model1 config suggests {len(model1_features)} features, but model has {model1_info['num_features']}")
-        # Truncate to actual model size
-        model1_features = model1_features[:model1_info['num_features']]
+    # Validate we have the right number of features
+    if len(model1_indices) != len(benchmark_features):
+        print(f"WARNING: Model1 config suggests {len(benchmark_features)} features, but model has {model1_info['num_features']}")
     
-    if len(model2_features) != model2_info['num_features']:
-        print(f"WARNING: Model2 config suggests {len(model2_features)} features, but model has {model2_info['num_features']}")
-        # Truncate to actual model size  
-        model2_features = model2_features[:model2_info['num_features']]
+    if len(model2_indices) != len(benchmark_features):
+        print(f"WARNING: Model2 config suggests {len(benchmark_features)} features, but model has {model2_info['num_features']}")
     
-    # Find common features between both models and UKIDSS
+    # Find which benchmark features are available in UKIDSS
     comparison_features = []
-    for feature in ukidss_label_columns:
-        if feature in model1_features and feature in model2_features and "fraction" in feature:
+    ukidss_indices = []
+    final_model1_indices = []
+    final_model2_indices = []
+    
+    for i, feature in enumerate(benchmark_features):
+        if feature in ukidss_label_columns:
             comparison_features.append(feature)
+            ukidss_indices.append(ukidss_label_columns.index(feature))
+            final_model1_indices.append(model1_indices[i])
+            final_model2_indices.append(model2_indices[i])
     
     print(f"\nFound {len(comparison_features)} features common to both models and UKIDSS dataset.")
-    print(f"Model 1 features: {len(model1_features)} total")
-    print(f"Model 2 features: {len(model2_features)} total")
+    print(f"Model 1 features: {len(benchmark_features)} total")
+    print(f"Model 2 features: {len(benchmark_features)} total")
     
-    # Get indices for each model
-    model1_indices = [model1_features.index(f) for f in comparison_features]
-    model2_indices = [model2_features.index(f) for f in comparison_features]
-    ukidss_indices = [ukidss_label_columns.index(f) for f in comparison_features]
-    
-    # Extract relevant predictions and labels
-    model1_preds_final = model1_preds[:, model1_indices]
-    model2_preds_final = model2_preds[:, model2_indices]
+    # Extract relevant predictions and labels using the correct indices
+    model1_preds_final = model1_preds[:, final_model1_indices]
+    model2_preds_final = model2_preds[:, final_model2_indices]
     true_labels_final = true_labels[:, ukidss_indices]
     
     print(f"Model 1 final predictions: {model1_preds_final.shape}")
@@ -278,14 +278,21 @@ def run_single_benchmark(args):
     print(f"\nPredictions shape: {predictions.shape}")
     print(f"True labels shape: {true_labels.shape}")
 
-    # For a single model, we compare all its outputs against available labels
-    model_features = get_model_features_from_config(model_info['config_path'], model_info['model_path'])
+    # Get benchmark features and model-specific indices
+    benchmark_features = FeatureRegistry.get_benchmark_features()
+    model_indices = get_model_feature_indices(model_info['config_path'], model_info['model_path'])
     ukidss_label_columns = ukidss_dataset.label_columns
     
-    comparison_features = [f for f in model_features if f in ukidss_label_columns]
+    # Find which benchmark features are available in UKIDSS
+    comparison_features = []
+    pred_indices = []
+    label_indices = []
     
-    pred_indices = [model_features.index(f) for f in comparison_features]
-    label_indices = [ukidss_label_columns.index(f) for f in comparison_features]
+    for i, feature in enumerate(benchmark_features):
+        if feature in ukidss_label_columns:
+            comparison_features.append(feature)
+            pred_indices.append(model_indices[i])
+            label_indices.append(ukidss_label_columns.index(feature))
     
     preds_final = predictions[:, pred_indices]
     labels_final = true_labels[:, label_indices]

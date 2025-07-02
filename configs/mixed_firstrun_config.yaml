@@ -1,0 +1,46 @@
+# Galaxy Sommelier Mixed Firstrun Model Configuration (Legacy)
+# For evaluation purposes only - this is an older model with scattered feature indices
+
+# Data paths
+data:
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
+  processed_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/processed"
+  catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
+  catalog_name: "gz2_master_catalog_corrected.csv"
+  
+# Mixed dataset configuration - LEGACY (not standardized)
+mixed_data:
+  sdss_fraction: 0.5  # 50% SDSS, 50% DECaLS
+  use_mixed_dataset: true
+  feature_set: "legacy"  # Legacy mixed model with scattered features
+
+# Model configuration - LEGACY (52 outputs with scattered indices)
+model:
+  name: "facebook/dinov2-base"
+  num_outputs: 52  # Legacy mixed model output size
+  dropout_rate: 0.2
+  freeze_backbone: false
+
+# Legacy feature mapping - CRITICAL: This tells the system it's an old model
+standard_features:
+  use_standard_mapping: false  # This is a legacy model with scattered indices
+  
+# Data processing (same as current models)
+preprocessing:
+  image_size: 224
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+
+# Paths for model and results
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_firstrun"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/mixed_firstrun"
+
+# Hardware
+device: "cuda"
+num_workers: 4
+
+# Logging
+logging:
+  level: "INFO" 
