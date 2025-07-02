@@ -81,7 +81,7 @@ class GalaxySommelier(nn.Module):
                 nn.init.xavier_uniform_(module.weight)
                 nn.init.zeros_(module.bias)
                 
-    def forward(self, pixel_values, return_features=False, return_attention=False):
+    def forward(self, pixel_values, return_features=False, return_attention=False, **kwargs):
         """
         Forward pass through the model
         
@@ -89,12 +89,17 @@ class GalaxySommelier(nn.Module):
             pixel_values: Input images [batch_size, channels, height, width]
             return_features: Whether to return intermediate features
             return_attention: Whether to return attention maps
+            **kwargs: Additional arguments (ignored for PEFT compatibility)
             
         Returns:
             morphology_predictions: Galaxy morphology vote fractions
             features (optional): Intermediate feature representations
             attention_maps (optional): Attention maps from DINOv2
         """
+        # Ignore any text-model specific arguments that PEFT might inject
+        kwargs.pop('input_ids', None)
+        kwargs.pop('attention_mask', None)
+        kwargs.pop('token_type_ids', None)
         # Extract features using DINOv2
         outputs = self.dinov2(
             pixel_values=pixel_values,

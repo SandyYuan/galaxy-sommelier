@@ -59,9 +59,9 @@ device: "cuda"
 num_workers: 4
 pin_memory: true
 
-# Paths for outputs
-checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models"
-results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results"
+# Paths for outputs - SDSS-only training
+checkpoint_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only"
+results_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/results/sdss_only"
 
 # Logging
 logging:

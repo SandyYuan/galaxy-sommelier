@@ -31,7 +31,7 @@ python scripts/train_baseline.py \
     --no-resume
 
 # Check if head training completed successfully
-if [ ! -f "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt" ]; then
+if [ ! -f "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only/best_model.pt" ]; then
     echo "Warning: Head training checkpoint not found at expected location"
     echo "Looking for alternative checkpoint locations..."
     
@@ -49,13 +49,13 @@ python scripts/train_baseline.py \
     --wandb \
     --no-resume
 
-echo "=== Training Pipeline Completed ==="
-echo "Final model saved at: /pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt"
-echo "Results saved at: /pscratch/sd/s/sihany/galaxy-sommelier-data/results/"
+echo "=== SDSS-Only Training Pipeline Completed ==="
+echo "Final model saved at: /pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only/best_model.pt"
+echo "Results saved at: /pscratch/sd/s/sihany/galaxy-sommelier-data/results/sdss_only/"
 
 # Show final model info
-if [ -f "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt" ]; then
-    echo "Final model file size: $(du -h /pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt)"
+if [ -f "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only/best_model.pt" ]; then
+    echo "Final model file size: $(du -h /pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only/best_model.pt)"
     echo "SDSS-only training completed successfully!"
 else
     echo "Warning: Final model not found at expected location"
