@@ -126,6 +126,42 @@ class TripleMixedDataset(Dataset):
     def create_mixed_dataset(self):
         """Create mixed dataset using same logic as mixed_dataset.py."""
         
+        # Filter SDSS catalog for available images first (like mixed_dataset.py)
+        print("Filtering SDSS catalog for available images...")
+        sdss_available = []
+        for idx, row in tqdm(self.sdss_catalog.iterrows(), total=len(self.sdss_catalog), desc="SDSS images"):
+            objid = row['dr7objid']
+            # Try different image naming conventions
+            jpg_path = self.sdss_image_dir / f"{row.get('asset_id', objid)}.jpg"
+            if not jpg_path.exists():
+                jpg_path = self.sdss_image_dir / f"sdss_{objid}.jpg"
+            if not jpg_path.exists():
+                jpg_path = self.sdss_image_dir / f"{objid}.jpg"
+            
+            if jpg_path.exists():
+                sdss_available.append(idx)
+        
+        self.sdss_catalog = self.sdss_catalog.loc[sdss_available].reset_index(drop=True)
+        print(f"  SDSS galaxies with images: {len(self.sdss_catalog)}")
+        
+        # Filter DECaLS catalog for available images first (like mixed_dataset.py)
+        print("Filtering DECaLS catalog for available images...")
+        decals_available = []
+        for idx, row in tqdm(self.decals_catalog.iterrows(), total=len(self.decals_catalog), desc="DECaLS images"):
+            iauname = row['iauname']
+            if pd.isna(iauname) or not isinstance(iauname, str) or len(iauname) < 4:
+                continue
+                
+            # DECaLS naming: J103438.28-005109.6 -> J103/J103438.28-005109.6.png
+            directory = iauname[:4]  # e.g., 'J103'
+            image_path = self.decals_image_dir / directory / f"{iauname}.png"
+            
+            if image_path.exists():
+                decals_available.append(idx)
+        
+        self.decals_catalog = self.decals_catalog.loc[decals_available].reset_index(drop=True)
+        print(f"  DECaLS galaxies with images: {len(self.decals_catalog)}")
+        
         # Filter HST catalog for available images first
         print("Filtering HST catalog for available images...")
         hst_available = []
@@ -144,7 +180,7 @@ class TripleMixedDataset(Dataset):
         if len(self.hst_available) == 0:
             raise ValueError("No HST images found! Please check HST data directory and file naming.")
         
-        # Use same logic as mixed_dataset.py: min(available_catalogs) * 2 for SDSS+DECaLS
+        # Use same logic as mixed_dataset.py: min(FILTERED available_catalogs) * 2 for SDSS+DECaLS
         mixed_base_size = min(len(self.sdss_catalog), len(self.decals_catalog)) * 2
         
         # Split evenly between SDSS and DECaLS (50/50 like mixed dataset)
@@ -156,12 +192,13 @@ class TripleMixedDataset(Dataset):
         
         total_size = sdss_size + decals_size + hst_size
         
-        print(f"Target sample sizes (following mixed_dataset.py logic):")
+        print(f"Target sample sizes (following mixed_dataset.py logic - AFTER image filtering):")
         print(f"  Mixed base: min({len(self.sdss_catalog)}, {len(self.decals_catalog)}) * 2 = {mixed_base_size}")
         print(f"  SDSS: {sdss_size}")
         print(f"  DECaLS: {decals_size}")
         print(f"  HST: {hst_size} (ALL available with images)")
         print(f"  Total: {total_size}")
+        print(f"✅ Now consistent with mixed_dataset.py sample sizes!")
         
         # Sample from each catalog
         np.random.seed(self.random_seed)

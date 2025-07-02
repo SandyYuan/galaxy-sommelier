@@ -33,7 +33,7 @@ import json
 sys.path.append(str(Path(__file__).parent))
 
 from model_setup import GalaxySommelier
-from data_processing import get_transforms
+from sdss_dataset import get_transforms
 from ood_evaluation import UKIDSSDataset # Reusing dataset
 
 # --- Configuration ---

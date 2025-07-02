@@ -23,7 +23,7 @@ import json
 sys.path.append(str(Path(__file__).parent))
 
 from model_setup import GalaxySommelier
-from data_processing import create_data_loaders
+from sdss_dataset import create_data_loaders
 
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")

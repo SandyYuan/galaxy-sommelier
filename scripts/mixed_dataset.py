@@ -22,6 +22,9 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from sdss_decals_feature_mapping import SDSS_TO_DECALS, DECALS_TO_SDSS
 
+# Import the standardized feature mapping
+from standard_26_features import get_survey_columns, FEATURE_NAMES
+
 logger = logging.getLogger(__name__)
 
 class MixedSDSSDECaLSDataset(Dataset):
@@ -51,12 +54,17 @@ class MixedSDSSDECaLSDataset(Dataset):
         self.random_seed = random_seed
         self.high_quality = high_quality
         
+        # Load the standardized 26-feature columns for each survey
+        self.sdss_feature_columns = get_survey_columns('sdss')
+        self.decals_feature_columns = get_survey_columns('decals')
+        
         # Set random seed for reproducible sampling
         random.seed(random_seed)
         np.random.seed(random_seed)
         
         quality_mode = "high-quality" if high_quality else "random"
-        logger.info(f"Loading mixed dataset with {sdss_fraction:.1%} SDSS ({quality_mode}), {1-sdss_fraction:.1%} DECaLS")
+        logger.info(f"Loading mixed dataset with standardized 26 features")
+        logger.info(f"Sampling: {sdss_fraction:.1%} SDSS ({quality_mode}), {1-sdss_fraction:.1%} DECaLS")
         
         # Load and prepare catalogs
         self.load_catalogs(sdss_catalog_path, decals_catalog_path)
@@ -67,6 +75,8 @@ class MixedSDSSDECaLSDataset(Dataset):
         logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
         logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
         logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
+        logger.info(f"Output features: {len(self.output_features)} standardized features")
+        logger.info(f"Feature verification: Each sample will output exactly {len(self.output_features)} features")
         
     def load_catalogs(self, sdss_catalog_path, decals_catalog_path):
         """Load and prepare SDSS and DECaLS catalogs"""
@@ -127,32 +137,28 @@ class MixedSDSSDECaLSDataset(Dataset):
         logger.info(f"DECaLS galaxies with images: {len(self.decals_catalog)}")
         
     def get_common_features(self):
-        """Identify common morphological features between SDSS and DECaLS"""
+        """Verify standardized 26 features are available in both catalogs"""
         
-        # Get morphological feature columns (fractions and debiased)
-        sdss_morphology = [col for col in self.sdss_catalog.columns 
-                          if '_fraction' in col or '_debiased' in col]
-        decals_morphology = [col for col in self.decals_catalog.columns 
-                            if '_fraction' in col or '_debiased' in col]
+        # Verify SDSS features
+        missing_sdss = [col for col in self.sdss_feature_columns if col not in self.sdss_catalog.columns]
+        if missing_sdss:
+            raise ValueError(f"Missing SDSS features: {missing_sdss}")
+        logger.info(f"✅ All 26 SDSS features verified")
         
-        # Find overlapping features using our mapping
-        self.common_features_sdss = []
-        self.common_features_decals = []
+        # Verify DECaLS features
+        missing_decals = [col for col in self.decals_feature_columns if col not in self.decals_catalog.columns]
+        if missing_decals:
+            raise ValueError(f"Missing DECaLS features: {missing_decals}")
+        logger.info(f"✅ All 26 DECaLS features verified")
         
-        for sdss_col, decals_col in SDSS_TO_DECALS.items():
-            if sdss_col in sdss_morphology and decals_col in decals_morphology:
-                self.common_features_sdss.append(sdss_col)
-                self.common_features_decals.append(decals_col)
+        # Store the standardized feature columns
+        self.common_features_sdss = self.sdss_feature_columns
+        self.common_features_decals = self.decals_feature_columns
         
-        logger.info(f"Found {len(self.common_features_sdss)} overlapping morphological features")
+        # Output features are always in standardized order (26 features)
+        self.output_features = FEATURE_NAMES
         
-        # Set the output feature names based on chosen convention
-        if self.feature_set == 'sdss':
-            self.output_features = self.common_features_sdss
-        else:
-            self.output_features = self.common_features_decals
-            
-        logger.info(f"Using {self.feature_set.upper()} feature naming convention")
+        logger.info(f"Using standardized 26-feature mapping for consistent evaluation")
         
     def create_mixed_dataset(self, sdss_fraction, max_galaxies):
         """Create the mixed dataset by sampling from both surveys"""
@@ -198,14 +204,10 @@ class MixedSDSSDECaLSDataset(Dataset):
                 'weight': row.get('total_votes', 1.0)
             }
             
-            # Add morphological features (using SDSS names)
-            for feature in self.common_features_sdss:
-                if self.feature_set == 'sdss':
-                    entry[feature] = row[feature]
-                else:
-                    # Convert to DECaLS naming
-                    decals_feature = SDSS_TO_DECALS[feature]
-                    entry[decals_feature] = row[feature]
+            # Add standardized features in order
+            features = self.extract_standardized_features(row, 'sdss')
+            for i, feature_name in enumerate(FEATURE_NAMES):
+                entry[feature_name] = features[i]
             
             mixed_data.append(entry)
         
@@ -220,14 +222,10 @@ class MixedSDSSDECaLSDataset(Dataset):
                 'weight': row.get('smooth-or-featured_total-votes', 1.0)
             }
             
-            # Add morphological features
-            for i, decals_feature in enumerate(self.common_features_decals):
-                if self.feature_set == 'decals':
-                    entry[decals_feature] = row[decals_feature]
-                else:
-                    # Convert to SDSS naming
-                    sdss_feature = self.common_features_sdss[i]
-                    entry[sdss_feature] = row[decals_feature]
+            # Add standardized features in order
+            features = self.extract_standardized_features(row, 'decals')
+            for i, feature_name in enumerate(FEATURE_NAMES):
+                entry[feature_name] = features[i]
             
             mixed_data.append(entry)
         
@@ -238,6 +236,30 @@ class MixedSDSSDECaLSDataset(Dataset):
         # Handle NaN values
         for feature in self.output_features:
             self.mixed_catalog[feature] = self.mixed_catalog[feature].fillna(0.0)
+    
+    def extract_standardized_features(self, row, survey):
+        """
+        Extract features in standardized order.
+        
+        This ensures both SDSS and DECaLS output features in the same order
+        corresponding to the standard 26-feature mapping.
+        """
+        if survey == 'sdss':
+            feature_columns = self.sdss_feature_columns
+        elif survey == 'decals':
+            feature_columns = self.decals_feature_columns
+        else:
+            raise ValueError(f"Unknown survey: {survey}")
+        
+        # Extract features in standardized order
+        features = []
+        for col in feature_columns:
+            value = row.get(col, 0.0)  # Default to 0.0 if missing
+            if pd.isna(value):
+                value = 0.0
+            features.append(float(value))
+        
+        return np.array(features, dtype=np.float32)
             
     def __len__(self):
         return len(self.mixed_catalog)
@@ -272,14 +294,10 @@ class MixedSDSSDECaLSDataset(Dataset):
             # Could add these back with a custom collate function if needed
         }
 
-def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None, high_quality=False):
+def create_mixed_data_loaders(config, transforms_dict, sample_size=None, sdss_fraction=0.5, high_quality=False):
     """Create mixed SDSS+DECaLS data loaders"""
     
-    import yaml
-    from data_processing import get_transforms
-    
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
+    # Config is already a dictionary, no need to load from file
     
     data_config = config['data']
     training_config = config['training']
@@ -314,15 +332,21 @@ def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None, 
     val_indices = list(range(train_size, train_size + val_size))
     test_indices = list(range(train_size + val_size, dataset_size))
     
-    # Create datasets with transforms
-    train_dataset = torch.utils.data.Subset(full_dataset, train_indices)
-    val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
-    test_dataset = torch.utils.data.Subset(full_dataset, test_indices)
+    # Create separate dataset instances with different transforms for each split
+    train_dataset_with_transform = MixedSDSSDECaLSDataset(
+        sdss_catalog_path=sdss_catalog,
+        decals_catalog_path=decals_catalog,
+        sdss_image_dir=data_config['sdss_dir'],
+        decals_image_dir=data_config['decals_dir'],
+        sdss_fraction=sdss_fraction,
+        max_galaxies=sample_size,
+        transform=transforms_dict['train'],
+        feature_set='sdss',
+        random_seed=42,
+        high_quality=high_quality
+    )
+    train_dataset = torch.utils.data.Subset(train_dataset_with_transform, train_indices)
     
-    # Set transforms for training
-    full_dataset.transform = get_transforms('train')
-    
-    # Create separate dataset instances for validation with different transforms
     val_dataset_with_transform = MixedSDSSDECaLSDataset(
         sdss_catalog_path=sdss_catalog,
         decals_catalog_path=decals_catalog,
@@ -330,7 +354,7 @@ def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None, 
         decals_image_dir=data_config['decals_dir'],
         sdss_fraction=sdss_fraction,
         max_galaxies=sample_size,
-        transform=get_transforms('val'),
+        transform=transforms_dict['val'],
         feature_set='sdss',
         random_seed=42,  # Same seed for consistent splits
         high_quality=high_quality
@@ -344,7 +368,7 @@ def create_mixed_data_loaders(config_path, sdss_fraction=0.5, sample_size=None, 
         decals_image_dir=data_config['decals_dir'],
         sdss_fraction=sdss_fraction,
         max_galaxies=sample_size,
-        transform=get_transforms('val'),
+        transform=transforms_dict['test'],
         feature_set='sdss',
         random_seed=42,  # Same seed for consistent splits
         high_quality=high_quality

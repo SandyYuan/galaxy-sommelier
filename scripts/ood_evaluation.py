@@ -25,7 +25,7 @@ import torchvision.transforms as transforms
 sys.path.append(str(Path(__file__).parent))
 
 from model_setup import GalaxySommelier
-from data_processing import get_transforms
+from sdss_dataset import get_transforms
 
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
@@ -534,8 +534,20 @@ class OODEvaluator:
         # 1. Evaluate on SDSS (in-distribution) first for comparison
         if sdss_config_path:
             print("\n1. Evaluating on SDSS (In-Distribution)...")
-            from data_processing import create_data_loaders
-            _, _, sdss_test_loader = create_data_loaders(sdss_config_path, sample_size=sample_size)
+            from sdss_dataset import create_data_loaders
+            
+            # Load config and setup transforms
+            import yaml
+            with open(sdss_config_path, 'r') as f:
+                sdss_config = yaml.safe_load(f)
+            
+            transforms_dict = {
+                'train': transform,
+                'val': transform,
+                'test': transform
+            }
+            
+            _, _, sdss_test_loader = create_data_loaders(sdss_config, transforms_dict, sample_size=sample_size)
             
             # Convert test loader to dataset format for evaluation
             sdss_dataset = sdss_test_loader.dataset.dataset  # Get underlying dataset from Subset

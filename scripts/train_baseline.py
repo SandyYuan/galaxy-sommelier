@@ -26,7 +26,7 @@ from torchvision import transforms
 sys.path.append(str(Path(__file__).parent))
 
 from model_setup import GalaxySommelier, GalaxyZooLoss, save_model_checkpoint, count_parameters
-from data_processing import create_data_loaders
+from sdss_dataset import create_data_loaders
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -250,9 +250,15 @@ class GalaxyTrainer:
                     self.config, transforms_dict, sample_size=self.sample_size
                 )
         else:
-            # Use standard Galaxy Zoo dataset
+            # Use standard SDSS Galaxy Zoo dataset
+            transforms_dict = {
+                'train': self.train_transform,
+                'val': self.val_transform,
+                'test': self.val_transform
+            }
+            
             self.train_loader, self.val_loader, self.test_loader = create_data_loaders(
-                self.config_path, sample_size=self.sample_size
+                self.config, transforms_dict, sample_size=self.sample_size
             )
         
         logger.info(f"Data loaders created - Train: {len(self.train_loader)} batches, "
