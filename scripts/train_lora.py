@@ -347,12 +347,12 @@ class GalaxyLoRATrainer:
         progress_bar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch + 1}")
         
         for batch_idx, batch in enumerate(progress_bar):
-            images = batch['images'].to(self.device)
-            targets = batch['targets'].to(self.device)
+            images = batch['image'].to(self.device)
+            targets = batch['labels'].to(self.device)
             
             # Forward pass with autocast
             with autocast():
-                predictions = self.model(images)
+                predictions = self.model(pixel_values=images)
                 loss_dict = self.criterion(predictions, targets)
                 loss = loss_dict['total_loss']
             
@@ -391,11 +391,11 @@ class GalaxyLoRATrainer:
         
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc="Validation"):
-                images = batch['images'].to(self.device)
-                targets = batch['targets'].to(self.device)
+                images = batch['image'].to(self.device)
+                targets = batch['labels'].to(self.device)
                 
                 with autocast():
-                    predictions = self.model(images)
+                    predictions = self.model(pixel_values=images)
                     loss_dict = self.criterion(predictions, targets)
                     loss = loss_dict['total_loss']
                 
