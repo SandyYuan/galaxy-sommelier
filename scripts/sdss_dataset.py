@@ -31,13 +31,15 @@ class SDSSDataset(Dataset):
     
     def __init__(self, catalog_path, image_dir, transform=None, 
                  cache_dir='/pscratch/sd/s/sihany/galaxy-sommelier-data/processed',
-                 use_cache=True, sample_size=None):
+                 use_cache=True, sample_size=None, master_dataset=False):
         
         self.catalog_path = Path(catalog_path)
         self.image_dir = Path(image_dir)
         self.transform = transform
         self.cache_dir = Path(cache_dir)
         self.use_cache = use_cache
+        self.sample_size = sample_size
+        self.master_dataset = master_dataset
         
         # Load the standardized 26-feature columns for SDSS
         self.sdss_feature_columns = get_survey_columns('sdss')
@@ -64,6 +66,13 @@ class SDSSDataset(Dataset):
         
         # Filter for available images
         self.filter_available_images()
+        
+        if master_dataset:
+            # Master dataset keeps all data for splits to use
+            self.catalog_full = self.catalog.copy()
+            logger.info(f"Master dataset created with {len(self.catalog_full)} SDSS galaxies")
+        else:
+            logger.info(f"Final dataset: {len(self.catalog)} SDSS galaxies with standardized 26 features")
         
         # Create HDF5 cache for faster loading
         self.cache_file = self.cache_dir / f'sdss_cache_{len(self.catalog)}.h5'
@@ -134,7 +143,6 @@ class SDSSDataset(Dataset):
         
         logger.info(f"Found {len(available_indices)} galaxies with available images")
         self.catalog = self.catalog.loc[available_indices].reset_index(drop=True)
-        logger.info(f"Final dataset: {len(self.catalog)} SDSS galaxies with standardized 26 features")
     
     def load_image(self, objid):
         """Load image using asset_id mapping or direct objid"""
@@ -338,6 +346,69 @@ class SDSSDataset(Dataset):
             'objid': str(objid)
         }
 
+
+class SDSSSplitDataset(Dataset):
+    """Dataset for train/val/test splits that reuses master dataset's processed data"""
+    
+    def __init__(self, master_dataset, indices, transform=None):
+        """
+        Args:
+            master_dataset: SDSSDataset instance with processed data
+            indices: List of indices for this split
+            transform: Transform to apply to images
+        """
+        self.master_dataset = master_dataset
+        self.indices = indices
+        self.transform = transform
+        
+        # Use the master dataset's processed catalog
+        if hasattr(master_dataset, 'catalog_full'):
+            self.catalog = master_dataset.catalog_full.iloc[indices].reset_index(drop=True)
+        else:
+            self.catalog = master_dataset.catalog.iloc[indices].reset_index(drop=True)
+        
+        # Copy attributes from master dataset
+        self.label_columns = master_dataset.label_columns
+        self.objid_to_asset = master_dataset.objid_to_asset
+        self.image_dir = master_dataset.image_dir
+        
+    def __len__(self):
+        return len(self.catalog)
+    
+    def __getitem__(self, idx):
+        row = self.catalog.iloc[idx]
+        objid = row['dr7objid']
+        
+        # Load image using master dataset's methods
+        image = self.master_dataset.load_image(objid)
+        
+        if image is None:
+            # Return dummy data if image can't be loaded
+            image = Image.new('RGB', (224, 224), color=(0, 0, 0))
+        
+        # Resize
+        image = image.resize((224, 224), Image.Resampling.LANCZOS)
+        
+        # Apply transforms
+        if self.transform:
+            image = self.transform(image)
+        else:
+            # Default normalization
+            image = transforms.ToTensor()(image)
+            image = transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                                       std=[0.229, 0.224, 0.225])(image)
+        
+        # Get standardized labels
+        labels = self.master_dataset.extract_standardized_features(row)
+        weight = row['total_votes']
+        
+        return {
+            'image': image,
+            'labels': torch.tensor(labels, dtype=torch.float32),
+            'weight': torch.tensor(weight, dtype=torch.float32),
+            'objid': str(objid)
+        }
+
 def get_transforms(mode='train'):
     """Get image transforms for training or validation"""
     
@@ -377,59 +448,48 @@ def create_data_loaders(config, transforms_dict, sample_size=None):
             else:
                 raise FileNotFoundError("No Galaxy Zoo catalog found")
     
-    # Create full dataset
-    full_dataset = SDSSDataset(
+    # Create master dataset that does all expensive filtering once
+    master_dataset = SDSSDataset(
         catalog_path=catalog_path,
         image_dir=data_config['sdss_dir'],
-        transform=None,  # Will be set per split
+        transform=None,
         cache_dir=data_config['processed_dir'],
         use_cache=False,  # Disable caching for faster startup
-        sample_size=sample_size
+        sample_size=sample_size,
+        master_dataset=True  # This tells it to keep full data for splits
     )
     
     # Split dataset
-    dataset_size = len(full_dataset)
+    dataset_size = len(master_dataset)
     train_size = int(0.8 * dataset_size)
     val_size = int(0.1 * dataset_size)
     test_size = dataset_size - train_size - val_size
     
     logger.info(f"SDSS dataset splits: train={train_size}, val={val_size}, test={test_size}")
     
-    # Create splits
-    train_indices = range(train_size)
-    val_indices = range(train_size, train_size + val_size)
-    test_indices = range(train_size + val_size, dataset_size)
+    # Create indices for splits
+    train_indices = list(range(train_size))
+    val_indices = list(range(train_size, train_size + val_size))
+    test_indices = list(range(train_size + val_size, dataset_size))
     
-    # Create separate dataset instances with different transforms for each split
-    train_dataset_with_transform = SDSSDataset(
-        catalog_path=catalog_path,
-        image_dir=data_config['sdss_dir'],
-        transform=transforms_dict['train'],
-        cache_dir=data_config['processed_dir'],
-        use_cache=False,
-        sample_size=sample_size
+    # Create efficient split datasets that reuse master's processed data
+    train_dataset = SDSSSplitDataset(
+        master_dataset=master_dataset,
+        indices=train_indices,
+        transform=transforms_dict['train']
     )
-    train_dataset = torch.utils.data.Subset(train_dataset_with_transform, train_indices)
     
-    val_dataset_with_transform = SDSSDataset(
-        catalog_path=catalog_path,
-        image_dir=data_config['sdss_dir'],
-        transform=transforms_dict['val'],
-        cache_dir=data_config['processed_dir'],
-        use_cache=False,
-        sample_size=sample_size
+    val_dataset = SDSSSplitDataset(
+        master_dataset=master_dataset,
+        indices=val_indices,
+        transform=transforms_dict['val']
     )
-    val_dataset = torch.utils.data.Subset(val_dataset_with_transform, val_indices)
     
-    test_dataset_with_transform = SDSSDataset(
-        catalog_path=catalog_path,
-        image_dir=data_config['sdss_dir'],
-        transform=transforms_dict['test'],
-        cache_dir=data_config['processed_dir'],
-        use_cache=False,
-        sample_size=sample_size
+    test_dataset = SDSSSplitDataset(
+        master_dataset=master_dataset,
+        indices=test_indices,
+        transform=transforms_dict['test']
     )
-    test_dataset = torch.utils.data.Subset(test_dataset_with_transform, test_indices)
     
     # Create data loaders
     train_loader = DataLoader(
