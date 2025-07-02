@@ -26,9 +26,10 @@ if [ ! -f "feature_registry.py" ]; then
     exit 1
 fi
 
-echo "Starting LoRA Training..."
+echo "Starting LoRA Training on Mixed SDSS+DECaLS Dataset..."
 echo "Configuration: configs/lora_head_training_config.yaml"
 echo "Using conservative LoRA settings (rank=16, alpha=32)"
+echo "Dataset: 50% SDSS + 50% DECaLS with 26 standardized features"
 
 # Run LoRA training
 python scripts/train_lora.py \

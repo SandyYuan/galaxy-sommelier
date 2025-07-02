@@ -20,20 +20,28 @@ lora:
     - "dense"
   bias: "none"                  # Conservative: no bias adaptation
 
-# Data configuration
+# Data configuration - Mixed SDSS+DECaLS
 data:
-  sdss_catalog_path: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz2_hart16.csv"
-  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/images/sdss"
-  batch_size: 32
-  num_workers: 4
-  train_split: 0.8
-  val_split: 0.1
-  test_split: 0.1
+  scratch_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data"
+  sdss_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/sdss"
+  decals_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/decals"
+  catalogs_dir: "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs"
+  
+# Mixed dataset configuration - Use SDSS+DECaLS
+mixed_data:
+  sdss_fraction: 0.5  # 50% SDSS, 50% DECaLS
+  use_mixed_dataset: true
+  feature_set: "standard_26"  # Use standardized 26-feature mapping
 
 # Training configuration
 training:
+  batch_size: 32
   num_epochs: 5                 # Short training for LoRA head
   device: "cuda"
+  
+# Hardware
+num_workers: 4
+pin_memory: true
 
 # Optimizer configuration
 optimizer:

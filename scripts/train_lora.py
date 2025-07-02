@@ -26,7 +26,7 @@ from torchvision import transforms
 sys.path.append(str(Path(__file__).parent))
 
 from model_setup import GalaxySommelier, GalaxyZooLoss, save_model_checkpoint, count_parameters
-from sdss_dataset import create_data_loaders
+from mixed_dataset import create_mixed_data_loaders
 
 # Try to import PEFT for LoRA
 try:
@@ -211,18 +211,27 @@ class GalaxyLoRATrainer:
         }
     
     def setup_data_loaders(self):
-        """Setup train and validation data loaders - reuse from baseline"""
-        logger.info("Setting up data loaders...")
+        """Setup train and validation data loaders for mixed dataset"""
+        logger.info("Setting up mixed SDSS+DECaLS data loaders...")
         
-        # Use same data loading logic as baseline
-        self.train_loader, self.val_loader = create_data_loaders(
+        # Create transforms dictionary
+        transforms_dict = {
+            'train': self.train_transform,
+            'val': self.val_transform,
+            'test': self.val_transform
+        }
+        
+        # Use mixed dataset data loader
+        self.train_loader, self.val_loader, self.test_loader = create_mixed_data_loaders(
             config=self.config,
-            train_transform=self.train_transform,
-            val_transform=self.val_transform,
-            sample_size=self.sample_size
+            transforms_dict=transforms_dict,
+            sample_size=self.sample_size,
+            sdss_fraction=self.config['mixed_data']['sdss_fraction'],
+            high_quality=False
         )
         
         logger.info(f"Train batches: {len(self.train_loader)}, Val batches: {len(self.val_loader)}")
+        logger.info(f"Training on mixed SDSS+DECaLS dataset with {self.config['mixed_data']['sdss_fraction']:.1%} SDSS fraction")
         
     def setup_optimizer(self):
         """Setup optimizer and scheduler for LoRA parameters"""
