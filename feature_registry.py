@@ -54,9 +54,25 @@ class FeatureRegistry:
             'config_indicators': ['use_standard_mapping: true']
         },
         'legacy_scattered': {
-            'description': 'Old models with scattered feature indices',
-            'output_dimensions': [52, 74],  # Variable based on dataset
-            'feature_indices': [11, 17, 23, 29, 35, 41, 47, 53, 59],  # From mixed_feature_indices.txt
+            'description': 'Old models with scattered feature indices (74 outputs)',
+            'output_dimensions': 74,  # 74-output models
+            'feature_indices': [11, 17, 23, 29, 35, 41, 47, 53, 59],  # Original scattered indices
+            'feature_order': 'scattered',
+            'detection_patterns': ['pretrained', 'finetuned', 'headtrained'],
+            'config_indicators': ['use_standard_mapping: false']
+        },
+        'legacy_52_mixed': {
+            'description': '52-output mixed model with specific indices',
+            'output_dimensions': 52,
+            'feature_indices': [11, 17, 23, 29, 35, 41, 47, 48, 49],  # Adjusted for 52-output model
+            'feature_order': 'scattered',
+            'detection_patterns': ['mixed_firstrun'],
+            'config_indicators': ['use_standard_mapping: false']
+        },
+        'legacy_74_scattered': {
+            'description': '74-output models with full scattered indices',
+            'output_dimensions': 74,
+            'feature_indices': [11, 17, 23, 29, 35, 41, 47, 53, 59],  # Original scattered indices
             'feature_order': 'scattered',
             'detection_patterns': ['pretrained', 'finetuned', 'headtrained'],
             'config_indicators': ['use_standard_mapping: false']
@@ -70,7 +86,7 @@ class FeatureRegistry:
         '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed': 'standard_26',
         
         # Legacy scattered models (old _firstrun models with 52/74 features)
-        '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_firstrun': 'legacy_scattered',
+        '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_firstrun': 'legacy_52_mixed',
         '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/max_overlap_firstrun': 'legacy_scattered', 
         '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_high_quality_firstrun': 'legacy_scattered',
         '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only_firstrun': 'legacy_scattered',
@@ -81,7 +97,7 @@ class FeatureRegistry:
         'models/headtrained_model_6': 'legacy_scattered',
         
         # Alternative path patterns for flexibility
-        'mixed_firstrun': 'legacy_scattered',
+        'mixed_firstrun': 'legacy_52_mixed',
         'max_overlap_firstrun': 'legacy_scattered',
         'mixed_high_quality_firstrun': 'legacy_scattered', 
         'sdss_only_firstrun': 'legacy_scattered'

@@ -20,10 +20,18 @@ Building a state-of-the-art galaxy morphology classifier using DINOv2 fine-tunin
 - **Implementation**: `TripleMixedDataset` class supporting three-way survey mixing (33% SDSS, 33% DECaLS, 34% HST)
 - **Files**: `scripts/triple_mixed_dataset.py`, `configs/triple_mixed_*.yaml`
 
-### Current Issue: Dataset Sizing 🚧
-- **Problem**: Using arbitrary dataset sizes without scientific justification
-- **Need**: Implement data-driven sizing using `min(available_catalogs) * N` methodology
-- **Impact**: Required for fair comparison across all model variants
+### LoRA Implementation ✅ COMPLETED
+- **Implementation**: Created `train_lora.py` with conservative LoRA settings (rank=16, alpha=32)
+- **Benefits**: Parameter-efficient training (~1-5% trainable parameters), faster convergence, better generalization
+- **Files**: `scripts/train_lora.py`, `configs/lora_head_training_config.yaml`, `scripts/run_lora_training.sh`
+- **Integration**: Minimal changes to existing codebase, reuses all data loading and loss functions
+
+### Current Issues 🚧
+1. **Dataset Sizing**: Using arbitrary dataset sizes without scientific justification
+   - **Need**: Implement data-driven sizing using `min(available_catalogs) * N` methodology
+2. **Model Comparison Bug**: IndexError in `compare_models.py` when comparing models with different feature counts
+   - **Error**: `IndexError: index 53 is out of bounds for axis 1 with size 52`
+   - **Cause**: Feature mapping inconsistency between 52-feature and 26-feature models
 
 ---
 
@@ -46,8 +54,12 @@ Building a state-of-the-art galaxy morphology classifier using DINOv2 fine-tunin
 ```
 galaxy-sommelier/
 ├── configs/                    # Training configurations (26-feature standardized)
+│   ├── lora_head_training_config.yaml  # LoRA training configuration
+│   └── ...                     # Other configs
 ├── scripts/                    # Core implementation
-│   ├── compare_models.py       # Model evaluation and comparison
+│   ├── compare_models.py       # Model evaluation and comparison (needs bug fix)
+│   ├── train_lora.py          # LoRA training script
+│   ├── run_lora_training.sh    # LoRA training pipeline
 │   ├── triple_mixed_dataset.py # Three-survey dataset implementation
 │   ├── sdss_dataset.py         # SDSS-only dataset
 │   ├── mixed_dataset.py        # SDSS+DECaLS dataset
@@ -57,7 +69,7 @@ galaxy-sommelier/
 ├── plots/                      # Visualization outputs
 ├── feature_registry.py         # Feature mapping registry
 ├── four_survey_feature_mapping.csv  # Cross-survey feature mapping
-└── requirements.txt
+└── requirements.txt            # Updated with peft>=0.7.0
 ```
 
 ## Data Storage Structure ($PSCRATCH)
@@ -75,6 +87,7 @@ galaxy-sommelier/
 ├── models/                     # Trained model storage
 │   ├── best_model.pt          # SDSS-only (74 features)
 │   ├── mixed/best_model.pt    # SDSS+DECaLS (52 features)
+│   ├── lora/                  # LoRA model storage
 │   └── triple/                # Future triple-mixed models
 └── processed/                  # Preprocessed data cache
 ```
@@ -83,20 +96,25 @@ galaxy-sommelier/
 
 ## Immediate Next Steps
 
-### 1. Fix Dataset Sizing 🔥 HIGH PRIORITY
+### 1. Fix Model Comparison Bug 🔥 HIGH PRIORITY
+- **Task**: Fix IndexError in `compare_models.py` for different feature count models
+- **Issue**: Feature mapping fails when comparing 52-feature vs 26-feature models
+- **Solution**: Update feature intersection logic to handle mismatched dimensions
+
+### 2. Test LoRA Performance
+- **Task**: Train and evaluate LoRA model on SDSS dataset
+- **Command**: `./scripts/run_lora_training.sh`
+- **Goal**: Compare LoRA vs full fine-tuning efficiency and performance
+
+### 3. Fix Dataset Sizing
 - **Task**: Update all configs with principled dataset sizing approach
 - **Method**: Use `min(available_catalogs) * N` for consistent, data-driven sizes
 - **Files to Update**: All config files in `configs/`
 
-### 2. Retrain All Models on 26 Features
-- **Task**: Train standardized models for fair comparison
-- **Variants**: SDSS-only, Mixed (SDSS+DECaLS), Triple (SDSS+DECaLS+HST)
-- **Goal**: Direct performance comparison on identical feature sets
-
-### 3. Comprehensive Benchmarking
-- **Task**: Run `compare_models.py` on all standardized models
+### 4. Comprehensive Benchmarking
+- **Task**: Run fixed `compare_models.py` on all standardized models
 - **Test Set**: UKIDSS (held-out survey)
-- **Output**: Final performance comparison table
+- **Models**: Baseline, LoRA, Mixed (once comparison bug is fixed)
 
 ---
 
@@ -119,4 +137,6 @@ galaxy-sommelier/
 1. **Feature Standardization Critical**: Models must predict identical feature sets for valid comparison
 2. **Dataset Sizing Principles**: Use data-driven methodology, not arbitrary sizes
 3. **Survey Diversity Helps**: Mixed training significantly improves cross-survey generalization
-4. **Fair Comparison Essential**: Scientific conclusions require controlled experimental conditions
+4. **LoRA Benefits**: Parameter-efficient fine-tuning with minimal code changes, faster training, better generalization potential
+5. **Model Comparison Robustness**: Need robust feature mapping logic to handle models with different output dimensions
+6. **Fair Comparison Essential**: Scientific conclusions require controlled experimental conditions
