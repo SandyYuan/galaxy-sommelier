@@ -39,11 +39,13 @@ class TripleMixedDataset(Dataset):
     def __init__(self, sdss_catalog_path, decals_catalog_path, hst_catalog_path,
                  sdss_image_dir, decals_image_dir, hst_image_dir,
                  transform=None, split='train', 
-                 train_ratio=0.8, val_ratio=0.1, random_seed=42):
+                 train_ratio=0.8, val_ratio=0.1, random_seed=42,
+                 master_dataset=False):
         
         self.transform = transform
         self.split = split
         self.random_seed = random_seed
+        self.master_dataset = master_dataset
         
         # Load the standardized 26-feature columns for each survey
         self.sdss_feature_columns = get_survey_columns('sdss')
@@ -69,13 +71,20 @@ class TripleMixedDataset(Dataset):
         # Create mixed dataset using same logic as mixed_dataset.py
         self.create_mixed_dataset()
         
-        # Split dataset
-        self.split_dataset(train_ratio, val_ratio)
-        
-        print(f"Dataset created: {len(self.data)} {split} samples")
-        print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
-        print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
-        print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
+        # Split dataset (unless this is a master dataset)
+        if not master_dataset:
+            self.split_dataset(train_ratio, val_ratio)
+            print(f"Dataset created: {len(self.data)} {split} samples")
+            print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
+            print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
+            print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
+        else:
+            # Master dataset keeps all data for splits to use
+            self.data = self.full_data
+            print(f"Master dataset created: {len(self.full_data)} total samples")
+            print(f"  SDSS: {sum(1 for x in self.full_data if x['survey'] == 'sdss')} samples")
+            print(f"  DECaLS: {sum(1 for x in self.full_data if x['survey'] == 'decals')} samples")
+            print(f"  HST: {sum(1 for x in self.full_data if x['survey'] == 'hst')} samples")
     
     def load_catalogs(self, sdss_path, decals_path, hst_path):
         """Load and validate feature columns in all catalogs."""
@@ -117,6 +126,24 @@ class TripleMixedDataset(Dataset):
     def create_mixed_dataset(self):
         """Create mixed dataset using same logic as mixed_dataset.py."""
         
+        # Filter HST catalog for available images first
+        print("Filtering HST catalog for available images...")
+        hst_available = []
+        for idx, row in tqdm(self.hst_catalog.iterrows(), total=len(self.hst_catalog), desc="HST images"):
+            zooniverse_id = row['zooniverse_id']
+            if pd.isna(zooniverse_id) or not isinstance(zooniverse_id, str) or len(zooniverse_id) < 4:
+                continue
+                
+            image_path = self.hst_image_dir / f"cosmos_{zooniverse_id}.png"
+            if image_path.exists():
+                hst_available.append(idx)
+        
+        self.hst_available = self.hst_catalog.loc[hst_available].reset_index(drop=True)
+        print(f"  HST galaxies with images: {len(self.hst_available)}")
+        
+        if len(self.hst_available) == 0:
+            raise ValueError("No HST images found! Please check HST data directory and file naming.")
+        
         # Use same logic as mixed_dataset.py: min(available_catalogs) * 2 for SDSS+DECaLS
         mixed_base_size = min(len(self.sdss_catalog), len(self.decals_catalog)) * 2
         
@@ -124,8 +151,8 @@ class TripleMixedDataset(Dataset):
         sdss_size = mixed_base_size // 2
         decals_size = mixed_base_size // 2
         
-        # HST uses ALL available images
-        hst_size = len(self.hst_catalog)
+        # HST uses ALL available images with downloaded files
+        hst_size = len(self.hst_available)
         
         total_size = sdss_size + decals_size + hst_size
         
@@ -133,7 +160,7 @@ class TripleMixedDataset(Dataset):
         print(f"  Mixed base: min({len(self.sdss_catalog)}, {len(self.decals_catalog)}) * 2 = {mixed_base_size}")
         print(f"  SDSS: {sdss_size}")
         print(f"  DECaLS: {decals_size}")
-        print(f"  HST: {hst_size} (ALL available)")
+        print(f"  HST: {hst_size} (ALL available with images)")
         print(f"  Total: {total_size}")
         
         # Sample from each catalog
@@ -147,9 +174,9 @@ class TripleMixedDataset(Dataset):
         decals_indices = np.random.choice(len(self.decals_catalog), decals_size, replace=False)
         decals_sample = self.decals_catalog.iloc[decals_indices].reset_index(drop=True)
         
-        # HST sampling
-        hst_indices = np.random.choice(len(self.hst_catalog), hst_size, replace=False)
-        hst_sample = self.hst_catalog.iloc[hst_indices].reset_index(drop=True)
+        # HST sampling - use only available images
+        hst_indices = np.random.choice(len(self.hst_available), hst_size, replace=False)
+        hst_sample = self.hst_available.iloc[hst_indices].reset_index(drop=True)
         
         print(f"Actual sample sizes:")
         print(f"  SDSS: {len(sdss_sample)}")
@@ -301,21 +328,18 @@ class TripleMixedDataset(Dataset):
         """Load HST image."""
         row = self.hst_sample.iloc[catalog_idx]
         
-        # HST images are PNG files in subdirectories
-        subfolder = row.get('subfolder', 'unknown')
-        filename = row.get('filename', f"{objid}.png")
+        # HST images follow pattern: cosmos_{zooniverse_id}.png
+        zooniverse_id = row.get('zooniverse_id', objid)
+        filename = f"cosmos_{zooniverse_id}.png"
+        image_path = self.hst_image_dir / filename
         
-        image_path = self.hst_image_dir / subfolder / filename
-        
-        if image_path.exists():
-            try:
-                image = Image.open(image_path).convert('RGB')
-                return image
-            except Exception as e:
-                pass
-        
-        # Return black image if not found
-        return Image.new('RGB', (256, 256), color='black')
+        try:
+            image = Image.open(image_path).convert('RGB')
+            return image
+        except Exception as e:
+            # Return black image if not found
+            print(f"Warning: HST image not found: {filename}")
+            return Image.new('RGB', (256, 256), color='black')
     
     def __len__(self):
         return len(self.data)
@@ -346,6 +370,80 @@ class TripleMixedDataset(Dataset):
             'weight': torch.tensor(1.0, dtype=torch.float32)  # Default weight
         }
 
+
+class TripleMixedDatasetSplit(Dataset):
+    """
+    Efficient split of TripleMixedDataset that reuses preprocessed data.
+    
+    This avoids re-running expensive HST filtering for each split.
+    """
+    
+    def __init__(self, master_dataset, transform, split):
+        self.master_dataset = master_dataset
+        self.transform = transform
+        self.split = split
+        
+        # Create split using same logic as master dataset
+        self.create_split()
+    
+    def create_split(self):
+        """Create split from master dataset's full data."""
+        # Use same parameters as master dataset
+        train_ratio = self.master_dataset.train_ratio
+        val_ratio = self.master_dataset.val_ratio
+        random_seed = self.master_dataset.random_seed
+        
+        # Use master dataset's full_data (before any splitting)
+        full_data = self.master_dataset.full_data
+        
+        # Shuffle and split (same logic as original)
+        np.random.seed(random_seed)
+        indices = np.random.permutation(len(full_data))
+        
+        # Calculate split sizes
+        n_total = len(full_data)
+        n_train = int(n_total * train_ratio)
+        n_val = int(n_total * val_ratio)
+        
+        # Create splits
+        if self.split == 'train':
+            selected_indices = indices[:n_train]
+        elif self.split == 'val':
+            selected_indices = indices[n_train:n_train+n_val]
+        elif self.split == 'test':
+            selected_indices = indices[n_train+n_val:]
+        else:
+            raise ValueError(f"Unknown split: {self.split}")
+        
+        # Filter data for this split
+        self.data = [full_data[i] for i in selected_indices]
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        
+        # Load image using master dataset's methods
+        image = self.master_dataset.load_image(
+            sample['survey'], 
+            sample['catalog_idx'], 
+            sample['objid']
+        )
+        
+        # Apply transforms for this split
+        if self.transform:
+            image = self.transform(image)
+        
+        # Get features (already in standardized order)
+        features = sample['features']
+        
+        return {
+            'image': image,
+            'labels': torch.tensor(features, dtype=torch.float32),
+            'weight': torch.tensor(1.0, dtype=torch.float32)
+        }
+
 def get_triple_mixed_data_loaders(config, transforms_dict):
     """
     Create data loaders for triple mixed dataset.
@@ -353,6 +451,8 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     Returns train, validation, and test loaders using standardized
     26-feature mapping and same SDSS+DECaLS selection as mixed_dataset.py
     plus ALL available HST images.
+    
+    EFFICIENT: Does HST filtering only once and reuses for all splits.
     """
     from torch.utils.data import DataLoader
     
@@ -369,28 +469,21 @@ def get_triple_mixed_data_loaders(config, transforms_dict):
     num_workers = config.get('num_workers', 4)
     
     print(f"Creating triple mixed data loaders with standardized 26 features...")
+    print("⚡ Optimized: HST filtering will run only once for all splits")
     
-    # Create datasets
-    train_dataset = TripleMixedDataset(
+    # Create master dataset (does HST filtering once)
+    master_dataset = TripleMixedDataset(
         sdss_catalog, decals_catalog, hst_catalog,
         sdss_images, decals_images, hst_images,
-        transform=transforms_dict['train'],
-        split='train'
+        transform=None,  # No transform yet
+        split='train',   # Not used when master_dataset=True
+        master_dataset=True  # Keep all data, don't split
     )
     
-    val_dataset = TripleMixedDataset(
-        sdss_catalog, decals_catalog, hst_catalog,
-        sdss_images, decals_images, hst_images,
-        transform=transforms_dict['val'],
-        split='val'
-    )
-    
-    test_dataset = TripleMixedDataset(
-        sdss_catalog, decals_catalog, hst_catalog,
-        sdss_images, decals_images, hst_images,
-        transform=transforms_dict['test'],
-        split='test'
-    )
+    # Create split datasets that reuse the master dataset's processed data
+    train_dataset = TripleMixedDatasetSplit(master_dataset, transforms_dict['train'], 'train')
+    val_dataset = TripleMixedDatasetSplit(master_dataset, transforms_dict['val'], 'val') 
+    test_dataset = TripleMixedDatasetSplit(master_dataset, transforms_dict['test'], 'test')
     
     # Create data loaders
     train_loader = DataLoader(

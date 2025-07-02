@@ -1,6 +1,6 @@
 #!/bin/bash
 # Triple Mixed SDSS + DECaLS + HST Training Pipeline
-# Runs full fine-tuning with 3-survey mixed dataset
+# Runs two-stage training: head training → full fine-tuning
 
 set -e  # Exit on error
 
@@ -14,33 +14,32 @@ if [ ! -f "scripts/train_baseline.py" ]; then
     exit 1
 fi
 
-# Check if feature mapping exists
-if [ ! -f "sdss_decals_feature_mapping.py" ]; then
-    echo "Error: SDSS-DECaLS feature mapping not found"
-    exit 1
-fi
-
-# Check if triple mixed dataset exists
-if [ ! -f "scripts/triple_mixed_dataset.py" ]; then
-    echo "Error: Triple mixed dataset not found"
-    exit 1
-fi
+# Check required files
+echo "Checking required files..."
+for file in "sdss_decals_feature_mapping.py" "standard_26_features.py" "scripts/triple_mixed_dataset.py"; do
+    if [ ! -f "$file" ]; then
+        echo "Error: Required file not found: $file"
+        exit 1
+    fi
+done
+echo "✓ All required files found"
 
 # Check HST data availability
 echo "Checking HST data availability..."
-hst_png_count=$(find /pscratch/sd/s/sihany/galaxy-sommelier-data/hubble/images/ -name "*.png" | wc -l)
-hst_fits_count=$(find /pscratch/sd/s/sihany/galaxy-sommelier-data/hubble/images/ -name "*.fits" | wc -l)
-echo "HST PNG files: $hst_png_count"
-echo "HST FITS files: $hst_fits_count"
+hst_png_count=$(find /pscratch/sd/s/sihany/galaxy-sommelier-data/hubble/images/ -name "cosmos_*.png" | wc -l)
+echo "HST PNG files with cosmos_ pattern: $hst_png_count"
 
-if [ $hst_png_count -eq 0 ] && [ $hst_fits_count -eq 0 ]; then
-    echo "Error: No HST images found. Please ensure HST data is available."
-    exit 1
+if [ $hst_png_count -lt 10000 ]; then
+    echo "Warning: Only $hst_png_count HST images found. Training will use only available images."
+else
+    echo "✓ Good HST image availability ($hst_png_count images)"
 fi
 
-echo "Step 1: Starting Head Training (Frozen Backbone)..."
+echo ""
+echo "=== STAGE 1: Head Training (Frozen Backbone) ==="
 echo "Configuration: configs/triple_mixed_head_training_config.yaml"
-echo "Training for 5 epochs with frozen DINOv2 backbone"
+echo "Training parameters: 32 batch, 1e-4 LR, 5 epochs (same as successful mixed training)"
+echo "HST filtering: Only galaxies with downloaded images will be used"
 
 # Run head training
 python scripts/train_baseline.py \
@@ -48,32 +47,50 @@ python scripts/train_baseline.py \
     --wandb \
     --no-resume
 
+echo ""
+echo "=== Head Training Completed ==="
+
 # Check if head training completed successfully
-if [ ! -f "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed/best_model.pt" ]; then
-    echo "Warning: Head training checkpoint not found at expected location"
-    echo "Looking for alternative checkpoint locations..."
-    find /pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed -name "*.pt" -ls 2>/dev/null || echo "No triple_mixed model directory found yet"
+head_model="/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed/best_model.pt"
+if [ ! -f "$head_model" ]; then
+    echo "Error: Head training checkpoint not found at $head_model"
+    echo "Please check the training logs for errors"
+    exit 1
 fi
+echo "✓ Head training checkpoint found: $head_model"
 
-echo "Step 2: Starting Full Fine-tuning (Unfrozen Backbone)..."
-echo "Configuration: configs/triple_mixed_full_finetuning_config.yaml"
-echo "Training for 25 epochs with unfrozen DINOv2 backbone"
+echo ""
+echo "=== STAGE 2: Full Fine-tuning (Unfrozen Backbone) ==="
+echo "Configuration: configs/triple_mixed_full_finetuning_config.yaml"  
+echo "Training parameters: 16 batch, 1e-5 LR, 10 epochs (same as successful mixed training)"
+echo "Will automatically load from head training checkpoint"
 
-# Run full fine-tuning (will automatically load from head training checkpoint)
+# Run full fine-tuning
 python scripts/train_baseline.py \
     --config configs/triple_mixed_full_finetuning_config.yaml \
     --wandb \
     --no-resume
 
+echo ""
 echo "=== Triple Mixed Training Pipeline Completed ==="
-echo "Final model saved at: /pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed/"
 
-# Show final model info
-if [ -d "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed/" ]; then
+# Check final results
+final_model="/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed/best_model.pt"
+if [ -f "$final_model" ]; then
+    echo "✓ Final model saved: $final_model"
+    echo "✓ Training completed successfully!"
+    
+    # Show model directory contents
+    echo ""
     echo "Final model directory contents:"
     ls -la /pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed/
-    echo "Training completed successfully!"
 else
-    echo "Warning: Final model directory not found"
+    echo "Warning: Final model not found at expected location"
     echo "Please check the training logs for errors"
-fi 
+fi
+
+echo ""
+echo "Next steps:"
+echo "1. Run benchmark evaluation to compare with SDSS-only and Mixed models"
+echo "2. Test generalization on UKIDSS out-of-distribution data"
+echo "3. Create performance comparison plots" 
