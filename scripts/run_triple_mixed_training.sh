@@ -19,8 +19,8 @@ echo "Checking required files..."
 for file in "sdss_decals_feature_mapping.py" "standard_26_features.py" "scripts/triple_mixed_dataset.py"; do
     if [ ! -f "$file" ]; then
         echo "Error: Required file not found: $file"
-        exit 1
-    fi
+    exit 1
+fi
 done
 echo "✓ All required files found"
 
@@ -61,7 +61,7 @@ echo "✓ Head training checkpoint found: $head_model"
 
 echo ""
 echo "=== STAGE 2: Full Fine-tuning (Unfrozen Backbone) ==="
-echo "Configuration: configs/triple_mixed_full_finetuning_config.yaml"  
+echo "Configuration: configs/triple_mixed_full_finetuning_config.yaml"
 echo "Training parameters: 16 batch, 1e-5 LR, 10 epochs (same as successful mixed training)"
 echo "Will automatically load from head training checkpoint"
 
@@ -87,7 +87,7 @@ if [ -f "$final_model" ]; then
 else
     echo "Warning: Final model not found at expected location"
     echo "Please check the training logs for errors"
-fi
+fi 
 
 echo ""
 echo "Next steps:"

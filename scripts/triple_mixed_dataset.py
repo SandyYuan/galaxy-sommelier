@@ -73,11 +73,11 @@ class TripleMixedDataset(Dataset):
         
         # Split dataset (unless this is a master dataset)
         if not master_dataset:
-            self.split_dataset(train_ratio, val_ratio)
-            print(f"Dataset created: {len(self.data)} {split} samples")
-            print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
-            print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
-            print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
+        self.split_dataset(train_ratio, val_ratio)
+        print(f"Dataset created: {len(self.data)} {split} samples")
+        print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
+        print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
+        print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
         else:
             # Master dataset keeps all data for splits to use
             self.data = self.full_data
@@ -370,13 +370,13 @@ class TripleMixedDataset(Dataset):
         filename = f"cosmos_{zooniverse_id}.png"
         image_path = self.hst_image_dir / filename
         
-        try:
-            image = Image.open(image_path).convert('RGB')
-            return image
-        except Exception as e:
-            # Return black image if not found
+            try:
+                image = Image.open(image_path).convert('RGB')
+                return image
+            except Exception as e:
+        # Return black image if not found
             print(f"Warning: HST image not found: {filename}")
-            return Image.new('RGB', (256, 256), color='black')
+        return Image.new('RGB', (256, 256), color='black')
     
     def __len__(self):
         return len(self.data)

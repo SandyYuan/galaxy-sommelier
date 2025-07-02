@@ -81,9 +81,9 @@ class MixedSDSSDECaLSDataset(Dataset):
             logger.info(f"SDSS: {(self.mixed_catalog_full['survey'] == 'sdss').sum()}")
             logger.info(f"DECaLS: {(self.mixed_catalog_full['survey'] == 'decals').sum()}")
         else:
-            logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
-            logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
-            logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
+        logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
+        logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
+        logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
         
         logger.info(f"Output features: {len(self.output_features)} standardized features")
         logger.info(f"Feature verification: Each sample will output exactly {len(self.output_features)} features")
@@ -167,7 +167,7 @@ class MixedSDSSDECaLSDataset(Dataset):
         
         # Output features are always in standardized order (26 features)
         self.output_features = FEATURE_NAMES
-        
+            
         logger.info(f"Using standardized 26-feature mapping for consistent evaluation")
         
     def create_mixed_dataset(self, sdss_fraction, max_galaxies):

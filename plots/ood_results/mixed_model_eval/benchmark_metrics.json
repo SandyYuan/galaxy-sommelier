@@ -1,0 +1,37 @@
+{
+  "overall": {
+    "mse": 0.20135407149791718,
+    "mae": 0.33606308698654175,
+    "correlation": 0.24405240136096404,
+    "r_squared": 0.059561574610053084
+  },
+  "per_task": {
+    "t01_smooth_or_features_a01_smooth_fraction": {
+      "correlation": -0.8054621365366907
+    },
+    "t01_smooth_or_features_a02_features_or_disk_fraction": {
+      "correlation": 0.49547397488003414
+    },
+    "t01_smooth_or_features_a03_star_or_artifact_fraction": {
+      "correlation": -0.12821338825181333
+    },
+    "t02_edgeon_a04_yes_fraction": {
+      "correlation": -0.041023707016896
+    },
+    "t02_edgeon_a05_no_fraction": {
+      "correlation": -0.01402727403654023
+    },
+    "t03_bar_a06_bar_fraction": {
+      "correlation": -0.05470382313003542
+    },
+    "t03_bar_a07_no_bar_fraction": {
+      "correlation": 0.03658403747302735
+    },
+    "t04_spiral_a08_spiral_fraction": {
+      "correlation": 0.2583219278655094
+    },
+    "t04_spiral_a09_no_spiral_fraction": {
+      "correlation": -0.43615527139311744
+    }
+  }
+}

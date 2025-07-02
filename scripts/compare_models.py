@@ -31,10 +31,13 @@ import json
 
 # Add scripts directory to path
 sys.path.append(str(Path(__file__).parent))
+# Add root directory to path for feature_registry
+sys.path.append(str(Path(__file__).parent.parent))
 
 from model_setup import GalaxySommelier
 from sdss_dataset import get_transforms
 from ood_evaluation import UKIDSSDataset # Reusing dataset
+from feature_registry import FeatureRegistry
 
 # --- Configuration ---
 SDSS_MODEL_PATH = "/pscratch/sd/s/sihany/galaxy-sommelier-data/models/best_model.pt"
@@ -48,8 +51,7 @@ MIXED_NUM_FEATURES = 52 # From mixed config
 UKIDSS_CATALOG_PATH = "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/ukidss_catalog.csv"
 UKIDSS_IMAGE_DIR = "/pscratch/sd/s/sihany/galaxy-sommelier-data/ukidss"
 
-SHARED_FEATURES_FILE = Path(__file__).parent / "mixed_feature_indices.txt"
-SDSS_CATALOG_PATH = "/pscratch/sd/s/sihany/galaxy-sommelier-data/catalogs/gz2_master_catalog_corrected.csv"
+# Legacy paths no longer needed - using centralized registry
 
 def load_model(model_path, config_path, num_features):
     """Loads a trained model."""
@@ -99,10 +101,7 @@ def get_predictions(model, device, dataset):
             
     return np.concatenate(all_predictions), np.concatenate(all_labels)
 
-def get_sdss_feature_columns(catalog_path):
-    """Gets the full list of SDSS feature columns."""
-    df = pd.read_csv(catalog_path, nrows=0)
-    return [col for col in df.columns if '_fraction' in col and col.startswith('t')]
+# get_sdss_feature_columns function removed - using centralized registry
 
 def compute_metrics(predictions, true_labels, label_columns):
     """Compute comprehensive metrics, adapted from ood_evaluation.py"""
@@ -144,16 +143,7 @@ def compute_metrics(predictions, true_labels, label_columns):
         'per_task': task_metrics
     }
 
-def load_shared_features(filepath):
-    """Load shared feature names from the text file."""
-    features = []
-    with open(filepath, 'r') as f:
-        for line in f:
-            if line.startswith('#') or not line.strip():
-                continue
-            feature_name = line.split(' -> ')[0]
-            features.append(feature_name)
-    return features
+# load_shared_features function removed - using centralized registry
 
 def get_model_info_from_config(config_path):
     """Extract model path, features, and other info from config file."""
@@ -193,20 +183,15 @@ def get_model_info_from_config(config_path):
     }
 
 def get_model_features_from_config(config_path, model_path):
-    """Determine model features based on config and validate against model size."""
+    """Determine model features based on config using the unified registry."""
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Check if this is a mixed dataset model
-    mixed_config = config.get('mixed_data', {})
-    if mixed_config.get('use_mixed_dataset', False):
-        dataset_name = mixed_config.get('dataset_name', 'MixedSDSSDECaLSDataset')
-        if dataset_name == "MaxOverlapDataset":
-            return load_shared_features(SHARED_FEATURES_FILE)  # Max overlap uses same feature set as mixed
-        else:
-            return load_shared_features(SHARED_FEATURES_FILE)
-    else:
-        return get_sdss_feature_columns(SDSS_CATALOG_PATH)
+    # Use the unified registry to get features
+    return FeatureRegistry.get_benchmark_features(
+        model_path=model_path,
+        config=config
+    )
 
 def run_comparison(args):
     """Runs the two-model comparison."""
