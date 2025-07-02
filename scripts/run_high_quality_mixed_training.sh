@@ -15,8 +15,8 @@ if [ ! -f "scripts/train_baseline.py" ]; then
 fi
 
 # Check if feature mapping exists
-if [ ! -f "sdss_decals_feature_mapping.py" ]; then
-    echo "Error: SDSS-DECaLS feature mapping not found"
+if [ ! -f "feature_registry.py" ]; then
+    echo "Error: Unified feature registry not found"
     exit 1
 fi
 

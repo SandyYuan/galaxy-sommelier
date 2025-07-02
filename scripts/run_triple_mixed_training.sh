@@ -16,11 +16,11 @@ fi
 
 # Check required files
 echo "Checking required files..."
-for file in "sdss_decals_feature_mapping.py" "standard_26_features.py" "scripts/triple_mixed_dataset.py"; do
+for file in "feature_registry.py" "four_survey_feature_mapping.csv" "scripts/triple_mixed_dataset.py"; do
     if [ ! -f "$file" ]; then
-        echo "Error: Required file not found: $file"
-    exit 1
-fi
+        echo "Error: Required file $file not found"
+        exit 1
+    fi
 done
 echo "✓ All required files found"
 

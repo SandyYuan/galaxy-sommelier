@@ -20,10 +20,10 @@ import random
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from sdss_decals_feature_mapping import SDSS_TO_DECALS, DECALS_TO_SDSS
-
-# Import the standardized feature mapping
-from standard_26_features import get_survey_columns, FEATURE_NAMES
+from feature_registry import FeatureRegistry
+# Keep legacy mapping compatibility
+SDSS_TO_DECALS = FeatureRegistry.get_sdss_to_decals_mapping()
+DECALS_TO_SDSS = FeatureRegistry.get_decals_to_sdss_mapping()
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,8 @@ class MixedSDSSDECaLSDataset(Dataset):
         self.master_dataset = master_dataset
         
         # Load the standardized 26-feature columns for each survey
-        self.sdss_feature_columns = get_survey_columns('sdss')
-        self.decals_feature_columns = get_survey_columns('decals')
+        self.sdss_feature_columns = FeatureRegistry.get_survey_columns('sdss')
+        self.decals_feature_columns = FeatureRegistry.get_survey_columns('decals')
         
         # Set random seed for reproducible sampling
         random.seed(random_seed)
@@ -81,9 +81,9 @@ class MixedSDSSDECaLSDataset(Dataset):
             logger.info(f"SDSS: {(self.mixed_catalog_full['survey'] == 'sdss').sum()}")
             logger.info(f"DECaLS: {(self.mixed_catalog_full['survey'] == 'decals').sum()}")
         else:
-        logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
-        logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
-        logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
+            logger.info(f"Mixed dataset created with {len(self.mixed_catalog)} galaxies")
+            logger.info(f"SDSS: {(self.mixed_catalog['survey'] == 'sdss').sum()}")
+            logger.info(f"DECaLS: {(self.mixed_catalog['survey'] == 'decals').sum()}")
         
         logger.info(f"Output features: {len(self.output_features)} standardized features")
         logger.info(f"Feature verification: Each sample will output exactly {len(self.output_features)} features")
@@ -166,7 +166,7 @@ class MixedSDSSDECaLSDataset(Dataset):
         self.common_features_decals = self.decals_feature_columns
         
         # Output features are always in standardized order (26 features)
-        self.output_features = FEATURE_NAMES
+        self.output_features = FeatureRegistry.get_features_dataframe()['feature_name'].tolist()
             
         logger.info(f"Using standardized 26-feature mapping for consistent evaluation")
         
@@ -216,7 +216,8 @@ class MixedSDSSDECaLSDataset(Dataset):
             
             # Add standardized features in order
             features = self.extract_standardized_features(row, 'sdss')
-            for i, feature_name in enumerate(FEATURE_NAMES):
+            feature_names = FeatureRegistry.get_features_dataframe()['feature_name'].tolist()
+            for i, feature_name in enumerate(feature_names):
                 entry[feature_name] = features[i]
             
             mixed_data.append(entry)
@@ -234,7 +235,8 @@ class MixedSDSSDECaLSDataset(Dataset):
             
             # Add standardized features in order
             features = self.extract_standardized_features(row, 'decals')
-            for i, feature_name in enumerate(FEATURE_NAMES):
+            feature_names = FeatureRegistry.get_features_dataframe()['feature_name'].tolist()
+            for i, feature_name in enumerate(feature_names):
                 entry[feature_name] = features[i]
             
             mixed_data.append(entry)

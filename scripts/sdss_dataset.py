@@ -19,10 +19,10 @@ import logging
 from tqdm import tqdm
 import yaml
 
-# Import the standardized feature mapping
+# Import the unified feature registry
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
-from standard_26_features import get_survey_columns, FEATURE_NAMES
+from feature_registry import FeatureRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class SDSSDataset(Dataset):
         self.master_dataset = master_dataset
         
         # Load the standardized 26-feature columns for SDSS
-        self.sdss_feature_columns = get_survey_columns('sdss')
+        self.sdss_feature_columns = FeatureRegistry.get_survey_columns('sdss')
         
         # Create cache directory
         self.cache_dir.mkdir(parents=True, exist_ok=True)

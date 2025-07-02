@@ -21,10 +21,10 @@ import random
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from sdss_decals_feature_mapping import SDSS_TO_DECALS, DECALS_TO_SDSS
-
-# Import the standardized feature mapping
-from standard_26_features import get_survey_columns, FEATURE_NAMES
+from feature_registry import FeatureRegistry
+# Keep legacy mapping compatibility  
+SDSS_TO_DECALS = FeatureRegistry.get_sdss_to_decals_mapping()
+DECALS_TO_SDSS = FeatureRegistry.get_decals_to_sdss_mapping()
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,9 @@ class TripleMixedDataset(Dataset):
         self.master_dataset = master_dataset
         
         # Load the standardized 26-feature columns for each survey
-        self.sdss_feature_columns = get_survey_columns('sdss')
-        self.decals_feature_columns = get_survey_columns('decals')
-        self.hst_feature_columns = get_survey_columns('hst')
+        self.sdss_feature_columns = FeatureRegistry.get_survey_columns('sdss')
+        self.decals_feature_columns = FeatureRegistry.get_survey_columns('decals')
+        self.hst_feature_columns = FeatureRegistry.get_survey_columns('hst')
         
         print(f"Initializing TripleMixedDataset with standardized 26 features...")
         print(f"Using same SDSS+DECaLS selection as mixed dataset + ALL available HST images")
@@ -73,11 +73,11 @@ class TripleMixedDataset(Dataset):
         
         # Split dataset (unless this is a master dataset)
         if not master_dataset:
-        self.split_dataset(train_ratio, val_ratio)
-        print(f"Dataset created: {len(self.data)} {split} samples")
-        print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
-        print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
-        print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
+            self.split_dataset(train_ratio, val_ratio)
+            print(f"Dataset created: {len(self.data)} {split} samples")
+            print(f"  SDSS: {sum(1 for x in self.data if x['survey'] == 'sdss')} samples")
+            print(f"  DECaLS: {sum(1 for x in self.data if x['survey'] == 'decals')} samples")
+            print(f"  HST: {sum(1 for x in self.data if x['survey'] == 'hst')} samples")
         else:
             # Master dataset keeps all data for splits to use
             self.data = self.full_data
@@ -370,13 +370,13 @@ class TripleMixedDataset(Dataset):
         filename = f"cosmos_{zooniverse_id}.png"
         image_path = self.hst_image_dir / filename
         
-            try:
-                image = Image.open(image_path).convert('RGB')
-                return image
-            except Exception as e:
-        # Return black image if not found
+        try:
+            image = Image.open(image_path).convert('RGB')
+            return image
+        except Exception as e:
+            # Return black image if not found
             print(f"Warning: HST image not found: {filename}")
-        return Image.new('RGB', (256, 256), color='black')
+            return Image.new('RGB', (256, 256), color='black')
     
     def __len__(self):
         return len(self.data)
