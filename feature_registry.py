@@ -22,12 +22,13 @@ Usage:
 import pandas as pd
 import os
 from pathlib import Path
+from typing import Optional, Dict, List, Any
 
 class FeatureRegistry:
     """Unified registry for all Galaxy Sommelier feature mappings."""
     
-    _features_df = None
-    _initialized = False
+    _features_df: Optional[pd.DataFrame] = None
+    _initialized: bool = False
     
     # The 9 key morphological features used for benchmarking across all models
     BENCHMARK_9_FEATURES = [
@@ -64,11 +65,26 @@ class FeatureRegistry:
     
     # Registry for specific known models (can be extended)
     KNOWN_MODELS = {
+        # New standardized 26-feature models
         '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed': 'standard_26',
         '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/triple_mixed': 'standard_26',
+        
+        # Legacy scattered models (old _firstrun models with 52/74 features)
+        '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_firstrun': 'legacy_scattered',
+        '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/max_overlap_firstrun': 'legacy_scattered', 
+        '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/mixed_high_quality_firstrun': 'legacy_scattered',
+        '/pscratch/sd/s/sihany/galaxy-sommelier-data/models/sdss_only_firstrun': 'legacy_scattered',
+        
+        # Legacy models from benchmark results
         'models/pretrained_baseline': 'legacy_scattered',
         'models/finetuned_model_6': 'legacy_scattered',
-        'models/headtrained_model_6': 'legacy_scattered'
+        'models/headtrained_model_6': 'legacy_scattered',
+        
+        # Alternative path patterns for flexibility
+        'mixed_firstrun': 'legacy_scattered',
+        'max_overlap_firstrun': 'legacy_scattered',
+        'mixed_high_quality_firstrun': 'legacy_scattered', 
+        'sdss_only_firstrun': 'legacy_scattered'
     }
     
     @classmethod
